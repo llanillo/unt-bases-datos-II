@@ -186,6 +186,8 @@ where lab.laboratorio like '%LABOSINRATO%' and cla.clasificacion like '%APARATO 
 -- 15) Modifique el campo estado de la tabla mantenimiento_equipo, con la palabra “baja” y en la fecha de
 -- egreso ponga la fecha del sistema, de aquellos equipos que ingresaron hace más de 100 días (recalcule
 -- usando la fecha de ingreso y la del sistema)
+update mantenimiento_equipo set estado = 'baja', fecha_ingreso = current_date
+from;
 
 -- 16) Elimine las clasificaciones que no se usan en los medicamentos. 22 filas afectadas
 delete
