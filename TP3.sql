@@ -214,16 +214,19 @@ from tratamiento t
          inner join paciente pa using (id_paciente)
          inner join persona pe on pa.id_paciente = pe.id_persona
 where t.dosis > 2;
+-- Se puede realizar con informes, admision y medicos
 
 -- c) Muestre todas las facturas emitidas después del ’30-06-2021’.
 select f.fecha, f.hora, f.monto, f.pagada, f.saldo
 from factura f
 where f.fecha > '2021-06-30';
+-- Se puede realizar con facturacion
 
 -- d) Mostrar todas las facturas que han sido pagadas parcialmente.
 select f.fecha, f.hora, f.monto, f.pagada, f.saldo
 from factura f
 where f.saldo < f.monto;
+-- Se puede hacer con facturacion
 
 -- e) Listar los medicamentos que fueron recetados posterior a ’02-05-2020’, mostrando a que laboratorio y
 -- clasificación pertenecen.
@@ -233,6 +236,7 @@ from medicamento m
          inner join tratamiento t using (id_medicamento)
          inner join clasificacion c using (id_clasificacion)
 where t.fecha_indicacion > '2020-05-2';
+-- Se puede hacer con compras
 
 -- f) Mostrar la historia clínica del paciente ‘CARLOS ALBERTO MARINARO‘ (todas las consultas, tratamientos,
 -- estudios, internaciones, ordenados por fecha).
@@ -256,6 +260,7 @@ from persona pe
          inner join consulta c using (id_paciente)
 where pe.nombre like '%CARLOS ALBERTO%'
   and pe.apellido like '%MARINARO%';
+-- Se puede hacer con medicos
 
 -- g) Mostrar todos los pagos realizados por ‘RODOLFO JULIO URTUBEY’.
 select p.fecha, p.monto
@@ -266,6 +271,7 @@ from pago p
                     on pa.id_paciente = pe.id_persona
 where pe.nombre like '%RODOLFO JULIO%'
   and pe.apellido like '%URTUBEY%';
+--Se puede hacer con facturacion
 
 -- h) Mostrar todas las consultas que atendió el medico ‘LAURA LEONOR ESTRADA’.
 select c.fecha, c.hora, c.resultado
@@ -274,16 +280,19 @@ from consulta c
          inner join persona pe on empleado.id_empleado = pe.id_persona
 where pe.nombre like '%LAURA LEONOR%'
   and pe.apellido like '%ESTRADA%';
+-- Se puede hacer con informes, admision y medicos
 
 -- i) Listar todas las camas que están fuera de servicio.
 select c.id_cama, c.tipo, c.estado
 from cama c
 where c.estado like '%FUERA DE SERVICIO%';
+-- Se puede hacer con mantenimiento
 
 -- j) Listar todos los equipos que están en mantenimiento.
 select e.id_equipo, e.nombre, e.marca
 from equipo e
          inner join mantenimiento_equipo using (id_equipo);
+-- Se puede hacer con mantenimiento
 
 -- k) Muestre todas las compras realizadas en el 2020 indicando el medicamento, el proveedor y el empleado
 -- que realizo la compra.
@@ -304,23 +313,28 @@ from compra c
          inner join empleado e using (id_empleado)
          inner join persona pe on e.id_empleado = pe.id_persona
 where DATE_PART('year', c.fecha) = 2020;
+-- Se puede hacer con compras
 
 -- l) Agregar el registro en la tabla compras (1824, 23, ’10-11-2022’, 634, 1443.42, 75).
 insert into compra (id_medicamento, id_proveedor, fecha, id_empleado, precio_unitario, cantidad)
 values (1824, 23, '10-11-2022', 634, 1443.42, 75);
+-- Se puede hacer con compras
 
 -- m) Agregar el registro en la tabla proveedores (33, "DISTRI MED S.A.”, “AV. COLON 1291", "2411617").
 insert into proveedor (id_proveedor, proveedor, direccion, telefono)
 values (33, 'DISTRI MED S.A', 'AV. COLON 1291', '2411617');
+-- Se puede hacer con compras
 
 -- n) Agregar el registro en la tabla laboratorios (206, "INDUSTFARM”, “MIGUEL LINCE 124 ", "2416411").
 insert into laboratorio (id_laboratorio, laboratorio, direccion, telefono)
 values (206, 'INDUSTFARM', 'MIGUEL LINCE 124', '2416411');
+-- Se puede hacer con compras
 
 -- o) Modificar el teléfono del proveedor "DISTRI MED S.A.”, por el 22244433.
 update proveedor
 set telefono = '22244433'
 where proveedor like '%DISTRI MED S.A%';
+-- Se puede hacer con compras
 
 -- p) Modificar el horario de trabajo de ‘FABIOLA MELISA PACHECO’ del sábado a la mañana al sábado a la
 -- noche.
@@ -330,8 +344,10 @@ from empleado e
          inner join persona pe on e.id_empleado = pe.id_persona
 where pe.nombre like '%FABIOLA MELISA%'
   and pe.apellido like '%PACHECO%';
+-- Se puede hacer con RRHH
 
 -- q) Eliminar el laboratorio “BAYER QUIMICAS UNIDAS S.A.”
 delete
 from laboratorio l
 where l.laboratorio like '%BAYER QUIMICAS UNIDAS S.A%';
+-- Se puede hacer con compras
