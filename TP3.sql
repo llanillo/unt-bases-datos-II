@@ -11,9 +11,7 @@
 drop role llanillocabrerao_grupo_informes;
 create role llanillocabrerao_grupo_informes with nosuperuser nocreatedb nocreaterole nocreateuser inherit login connection limit -1 valid until 'infinity';
 
-grant select on obra_social, paciente, persona to llanillocabrerao_grupo_informes;
-grant select on table obra_social, paciente, persona to llanillocabrerao_grupo_informes;
-
+grant select on obra_social, paciente, persona to llanillocabrerao_grupo_informes; grant select on table obra_social, paciente, persona to llanillocabrerao_grupo_informes;
 -- b) Mostrar las consultas a las que asistió el paciente, también debe mostrar el medico que lo atendió, el
 -- diagnóstico y el tratamiento que le suministro.
 grant select on table consulta, empleado, persona, diagnostico, tratamiento to llanillocabrerao_grupo_informes;
