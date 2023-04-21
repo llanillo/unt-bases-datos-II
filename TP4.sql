@@ -178,6 +178,20 @@ commit;
 
 -- Ejercicio 7
 
+begin;
+
+insert into compras values ()
+
+commit;
 
 -- Ejercicio 8
 
+begin;
+
+delete from paciente where id = 175363;
+
+commit;
+
+begin;
+
+delete from medicamento where nombre like '%SALBUTOL GOTAS%';
