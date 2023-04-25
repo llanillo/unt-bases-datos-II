@@ -178,20 +178,101 @@ commit;
 
 -- Ejercicio 7
 
-begin;
+begin transaction;
 
-insert into compras values ()
+insert into compra (id_medicamento, id_proveedor, fecha, id_empleado, precio_unitario, cantidad)
+values ((select id_medicamento from medicamento where nombre like '%BILICNATA%'),
+        (select id_proveedor from proveedor where proveedor like '%MEDIFARMA%'), '2023-04-19',
+        (select max(id_persona) from persona),
+        (select precio from medicamento where nombre like '%BILICANTA%') * 0.7, 240);
 
+savepoint bilicanta;
+
+insert into compra (id_medicamento, id_proveedor, fecha, id_empleado, precio_unitario, cantidad)
+values ((select id_medicamento from medicamento where nombre like '%IRRITEN 200MG%'),
+        (select id_proveedor from proveedor where proveedor.proveedor like '%DIFESA%'), '2023-04-19',
+        (select max(id_persona) from persona),
+        (select precio from medicamento where nombre like '%IRRITEN 200MG%') * 0.7, 90);
+
+savepoint irriten;
+
+insert into compra (id_medicamento, id_proveedor, fecha, id_empleado, precio_unitario, cantidad)
+values ((select id_medicamento from medicamento where nombre like '%PEDIAFEN JARABE%'),
+        (select id_proveedor from proveedor where proveedor.proveedor like '%REYES DROGUERIA%'), '2023-04-19',
+        (select max(id_persona) from persona),
+        (select precio from medicamento where nombre like '%PEDIAFEN JARABE%') * 0.7, 150);
+
+savepoint pediafen;
+
+rollback;
 commit;
 
 -- Ejercicio 8
 
 begin;
 
-delete from paciente where id = 175363;
+delete
+from estudio_realizado
+where id_paciente = 175363;
+
+savepoint delete_estudio_realizado;
+
+delete
+from consulta
+where id_paciente = 175363;
+
+savepoint delete_consulta;
+
+delete
+from tratamiento
+where id_paciente = 175363;
+
+savepoint delete_tratamiento;
+
+delete
+from internacion
+where id_paciente = 175363;
+
+savepoint delete_interacion;
+
+delete
+from factura
+where id_paciente = 175363;
+
+savepoint delete_factura;
+
+delete
+from persona
+where id_persona = 175363;
+
+savepoint delete_persona;
+
+delete
+from paciente
+where id_paciente = 175363;
+
+savepoint delete_paciente;
 
 commit;
 
 begin;
 
-delete from medicamento where nombre like '%SALBUTOL GOTAS%';
+delete
+from compra
+where id_medicamento = (select id_medicamento from medicamento where nombre like '%SALBUTOL GOTAS%');
+
+savepoint delete_compra;
+
+delete
+from tratamiento
+where id_medicamento = (select id_medicamento from medicamento where nombre like '%SALBUTOL GOTAS%');
+savepoint delete_tratamiento;
+
+rollback to delete_compra;
+
+delete
+from medicamento
+where nombre like '%SALBUTOL GOTAS%';
+
+rollback;
+commit;
