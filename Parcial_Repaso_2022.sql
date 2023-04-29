@@ -23,8 +23,11 @@
 
 -- c) ¿Cuál de los siguientes índices considera es más efectivo para la tabla Comentarios, 
 -- (puntaje, fecha) o (fecha, puntaje)? Justifique su respuesta.
--- (fecha, puntaje) porque una búsqueda por fecha primero traería menos tuplas y tomaría menos de tiempo de consulta
--- (fecha, puntaje) debido a que hay más fechas que puntajes
+
+-- (fecha, puntaje) es la más efectiva de las dos debido a que el índice por fecha primero nos permitiría
+-- realizar un filtro y tener menor cantidad de tuplas haciendo que la consulta sea óptima y
+-- no tome tanto tiempo para su culminación. En cambio, si el índice compuesto fuera (puntaje, fecha) la
+-- consulta tardaría mucho tiempo buscando comentarios con cierto puntaje ya que pueden existir muchos.
 
 --EJERCICIO N° 2: Permisos
 -- Trabaje con la base de datos de Hospital. Realice las siguientes consultas e indique qué permisos y sobre qué tablas
@@ -34,8 +37,7 @@
 -- piso 5 en menos de 50 días.
 select p.nombre, p.apellido, c.cargo
 from persona p
-         inner join empleado e
-                    on (p.id_persona = e.id_empleado)
+         inner join empleado e on (p.id_persona = e.id_empleado)
          inner join cargo c using (id_cargo)
          inner join mantenimiento_cama mc using (id_empleado)
          inner join cama ca using (id_cama)
@@ -48,15 +50,13 @@ where h.tipo like '%TRIPLE%'
 -- empleado: read
 -- cargo: read
 -- mantenimiento_cama: read
--- habiración: read
+-- habitación: read
 -- cama: read
 
 -- b) La Dra RENATA LUISA ARAOS ESTRADA indica hoy la internación del paciente RENE ARIAS en cualquier cama
 -- del piso 8 pero que sea una habitación DOBLES PRIVADA. Cargue lo necesario.
 
 -- PRUEBAS
-select CURRENT_DATE;
-select LOCALTIME;
 select *
 from habitacion;
 select id_cama
@@ -65,52 +65,52 @@ from cama c
 where c.estado like '%OK%'
   and h.piso = 8
   and h.tipo like '%DOBLES PRIVADA%';
+
 select id_empleado
 from empleado e
          inner join persona p on (p.id_persona = e.id_empleado)
 where p.nombre like 'RENATA LUISA'
   and p.apellido like 'ARAOS ESTRADA';
+
+select *
+from persona
+where nombre like '%RENE%'
+  and apellido like '%ARIAS%';
 -- PRUEBAS
 
 insert into internacion
-values ((select id_paciente
-         from persona p
-                  inner join paciente pa on (p.id_persona = pa.id_paciente)
-         where p.nombre like '%RENE ARIAS%'
-         limit 1),
+values ((select id_persona from persona p where p.nombre like '%RENE' and p.apellido like '%ARIAS%' limit 1),
         (select id_cama
          from cama c
                   inner join habitacion h using (id_habitacion)
          where c.estado like '%OK%'
            and h.piso = 8
            and h.tipo like '%DOBLES PRIVADA%'
-         limit 1),
-        CURRENT_DATE,
-        (select id_empleado
-         from empleado e
-                  inner join persona p on (p.id_persona = e.id_empleado)
-         where p.nombre like '%RENATA LUISA%'
-           and p.apellido like '%ARAOS ESTRADA%'
-         limit 1),
-        null,
-        null,
-        null);
+         limit 1), CURRENT_DATE, (select id_persona
+                                  from persona p
+                                  where p.nombre like '%RENATA LUISA%'
+                                    and p.apellido like '%ARAOS ESTRADA%'
+                                  limit 1), null, null, null);
+
+-- internación: rw
+-- persona: r
+-- cama: r
+-- habitación: r
+
 -- c) Aumente en un 15% el precio de la habitación más usada (la cama con más internaciones)
 
 update habitacion
 set precio = precio * 1.15
-WHERE id_habitacion =
-      (select h.id_habitacion, count(*)
-       from habitacion h
-                inner join cama c using (id_habitacion)
-                inner join internacion using (id_cama)
-       group by id_habitacion
-       order by count(*) desc
-       limit 1);
-
--- habitacion: rw
+WHERE id_habitacion = (select h.id_habitacion
+                       from habitacion h
+                                inner join cama c using (id_habitacion)
+                                inner join internacion using (id_cama)
+                       group by id_habitacion
+                       order by count(*) desc
+                       limit 1);
+-- habitación: rw
 -- cama: r
--- internacion: r
+-- internación: r
 
 
 -- EJERCICIO N° 3: Transacciones
@@ -138,17 +138,19 @@ commit;
 
 begin;
 
-update estudio
+update estudio e
 set precio = precio * 1.2
 from tipo_estudio t
-where t.tipo_estudio like '%GENETICA%';
+where e.id_tipo = t.id_tipo
+  and t.tipo_estudio like '%GENETICA%';
 
 savepoint estudio_genetica;
 
-update estudio
+update estudio e
 set precio = precio * 1.05
 from tipo_estudio t
-where t.tipo_estudio like '%TOMOGRAFIA%';
+where e.id_tipo = t.id_tipo
+  and t.tipo_estudio like '%TOMOGRAFIA%';
 
 savepoint estudio_tomografia;
 
