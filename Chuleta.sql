@@ -14,7 +14,7 @@ from tratamiento
 where id_medicamento = (select id_medicamento from medicamento where nombre like '%SALBUTOL GOTAS%');
 
 -- EXTRAER DIA, MES O AÑO DE UNA FECHA
-select * date_part('day', now());
+select date_part('day', now());
 
 -- CREAR ÍNDICES
 create index index_informacion_cama on cama (tipo, estado);
