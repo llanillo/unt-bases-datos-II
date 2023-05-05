@@ -11,21 +11,44 @@
 drop role llanillocabrerao_grupo_informes;
 create role llanillocabrerao_grupo_informes with nosuperuser nocreatedb nocreaterole nocreateuser inherit login connection limit -1 valid until 'infinity';
 
-grant select on obra_social, paciente, persona to llanillocabrerao_grupo_informes; grant select on table obra_social, paciente, persona to llanillocabrerao_grupo_informes;
+grant
+select
+on obra_social, paciente, persona to llanillocabrerao_grupo_informes;
+
+grant
+select
+on
+table
+obra_social
+, paciente, persona to llanillocabrerao_grupo_informes;
+
 -- b) Mostrar las consultas a las que asistió el paciente, también debe mostrar el medico que lo atendió, el
 -- diagnóstico y el tratamiento que le suministro.
-grant select on table consulta, empleado, persona, diagnostico, tratamiento to llanillocabrerao_grupo_informes;
+grant
+select
+on table consulta, diagnostico, tratamiento to llanillocabrerao_grupo_informes;
+
+grant select (id_medicamento, nombre, presentacion) on medicamento to llanillocabrerao_grupo_informes;
 
 -- c) Mostrar las internaciones que tuvo el paciente, debe mostrar la habitación y la cama en la que estuvo.
-grant select on table internacion, habitacion, cama to llanillocabrerao_grupo_informes;
+grant
+select
+on table internacion, habitacion, cama to llanillocabrerao_grupo_informes;
 
 -- d) Mostrar los estudios que le realizaron, los equipos que se utilizaron y el profesional que le realizo el
 -- estudio.
-grant select on estudio_realizado, estudio, tipo_estudio, equipo, empleado, persona to llanillocabrerao_grupo_informes;
+grant
+select
+on estudio_realizado, equipo, to llanillocabrerao_grupo_informes;
+
+grant select (id_estudio, nombre) on estudio to llanillocabrerao_grupo_informes;
+grant select (nombre, apellido) on personas to llanillocabrerao_grupo_informes;
 
 -- e) Mostrar datos de los empleados, horarios que cumple, las consultas y diagnósticos, estudios en los que
 -- intervino.
-grant select on empleado, turno, trabajan, diagnostico, consulta to llanillocabrerao_grupo_informes;
+grant
+select
+on empleado, turno, trabajan, diagnostico, consulta to llanillocabrerao_grupo_informes;
 
 -- Admisión
 drop role llanillocabrerao_grupo_admision;
@@ -36,7 +59,9 @@ grant insert, update, delete on paciente to llanillocabrerao_grupo_admision;
 grant insert on persona to llanillocabrerao_grupo_admision;
 
 -- b) Listar consultas, tratamientos, diagnósticos y estudios realizados de un determinado paciente.
-grant select on consulta, tratamiento, diagnostico, estudio_realizado, paciente, persona to llanillocabrerao_grupo_admision;
+grant
+select
+on consulta, tratamiento, diagnostico, estudio_realizado, paciente, persona to llanillocabrerao_grupo_admision;
 
 -- c) Agregar consultas.
 grant insert on consulta to llanillocabrerao_grupo_admision;
@@ -55,7 +80,8 @@ create role llanillocabrerao_grupo_rrhh with nosuperuser nocreatedb nocreaterole
 grant insert, update, delete on empleado to llanillocabrerao_grupo_rrhh;
 
 -- b) Modificar los datos de los empleados, especialidad, cargo, horarios que cumplen.
-grant update on empleado, persona, especialidad, cargo, trabajan, turno to llanillocabrerao_grupo_rrhh;
+grant
+update on empleado, persona, especialidad, cargo, trabajan, turno to llanillocabrerao_grupo_rrhh;
 
 -- Médicos
 drop role llanillocabrearao_grupo_medicos;
@@ -84,29 +110,43 @@ drop role llanillocabrerao_grupo_compras;
 create role llanillocabrerao_grupo_compras with nosuperuser nocreaterole nocreatedb nocreateuser inherit login connection limit -1 valid until 'infinity';
 
 -- a) Listar compras, mostrando proveedores, clasificación y laboratorio de cada insumo adquirido.
-grant select on compra, proveedor, clasificacion, laboratorio to llanillocabrerao_grupo_compras;
+grant
+select
+on compra, proveedor, clasificacion, laboratorio to llanillocabrerao_grupo_compras;
 
 -- b) Agregar laboratorios, clasificaciones, proveedores y medicamentos.
-grant insert on laboratorio, clasificacion, proveedor, medicamento to llanillocabrerao_grupo_compras;
+grant
+insert
+on
+laboratorio
+, clasificacion, proveedor, medicamento to llanillocabrerao_grupo_compras;
 
 -- c) Modificar laboratorios, clasificaciones, proveedores y medicamentos.
-grant select on laboratorio, clasificacion, proveedor, medicamento to llanillocabrerao_grupo_compras;
+grant
+select
+on laboratorio, clasificacion, proveedor, medicamento to llanillocabrerao_grupo_compras;
 
 -- d) Eliminar laboratorios, clasificaciones, proveedores y medicamentos.
-grant delete on laboratorio, clasificacion, proveedor, medicamento to llanillocabrerao_grupo_compras;
+grant
+delete
+on laboratorio, clasificacion, proveedor, medicamento to llanillocabrerao_grupo_compras;
 
 -- Facturación
 drop role llanillocabrerao_grupo_facturacion;
 create role llanillocabrerao_grupo_facturacion with nosuperuser nocreateuser nocreatedb nocreaterole inherit login connection limit -1 valid until 'infinity';
 
 -- a) Listar las facturas, mostrando los pacientes.
-grant select on factura, paciente, persona to llanillocabrerao_grupo_facturacion;
+grant
+select
+on factura, paciente, persona to llanillocabrerao_grupo_facturacion;
 
 -- b) Agregar, modificar y eliminar facturas.
 grant insert, update, delete on factura to llanillocabrerao_grupo_facturacion;
 
 -- c) Listar los pagos, mostrando el paciente.
-grant select on pago, paciente, persona to llanillocabrerao_grupo_facturacion;
+grant
+select
+on pago, paciente, persona to llanillocabrerao_grupo_facturacion;
 
 -- d) Agregar modificar y eliminar pagos.
 grant insert, update, delete on pago to llanillocabrerao_grupo_facturacion;
@@ -116,10 +156,14 @@ drop role llanillocabrerao_grupo_mantenimiento;
 create role llanillocabrerao_grupo_mantenimiento with nosuperuser nocreateuser nocreatedb nocreaterole inherit login connection limit -1 valid until 'infinity';
 
 -- a) Listar los equipos y el estado de los mismos.
-grant select on equipo, mantenimiento_equipo to llanillocabrerao_grupo_mantenimiento;
+grant
+select
+on equipo, mantenimiento_equipo to llanillocabrerao_grupo_mantenimiento;
 
 -- b) Listar las camas y el estado de las mismas.
-grant select on cama, mantenimiento_cama to llanillocabrerao_grupo_mantenimiento;
+grant
+select
+on cama, mantenimiento_cama to llanillocabrerao_grupo_mantenimiento;
 
 -- c) Agregar nuevos equipos.
 grant insert on equipo to llanillocabrerao_grupo_mantenimiento;
@@ -153,7 +197,9 @@ grant insert, update, delete on obra_social to llanillocabrerao_grupo_sistemas;
 grant insert, update, delete on turno to llanillocabrerao_grupo_sistemas;
 
 -- h) Listar todas las tablas antes mencionadas.
-grant select on estudio, cargo, especialidad, tipo_estudio, consultorio, obra_social, turno to llanillocabrerao_grupo_sistemas;
+grant
+select
+on estudio, cargo, especialidad, tipo_estudio, consultorio, obra_social, turno to llanillocabrerao_grupo_sistemas;
 
 -- Ejercicio nro. 3:
 -- Con su usuario realice las siguientes consultas.
@@ -337,9 +383,9 @@ where proveedor like '%DISTRI MED S.A%';
 -- p) Modificar el horario de trabajo de ‘FABIOLA MELISA PACHECO’ del sábado a la mañana al sábado a la
 -- noche.
 update turno t
-set descripcion = 'Sabados De 9:00 A 20:00'
-from empleado e
-         inner join persona pe on e.id_empleado = pe.id_persona
+set descripcion = 'Sabados De 9:00 A 20:00' from empleado e
+         inner join persona pe
+on e.id_empleado = pe.id_persona
 where pe.nombre like '%FABIOLA MELISA%'
   and pe.apellido like '%PACHECO%';
 -- Se puede hacer con RRHH
