@@ -21,7 +21,7 @@
 -- Un índice compuesto por fecha y título porque muchas búsquedas de noticias se realizan por
 -- fechas o palabras claves en el título, lo cuál proporcionaría resultados con menor cantidad de tuplas
 
--- c) ¿Cuál de los siguientes índices considera es más efectivo para la tabla Comentarios, 
+-- c) ¿Cuál de los siguientes índices considera es más efectivo para la tabla Comentarios,
 -- (puntaje, fecha) o (fecha, puntaje)? Justifique su respuesta.
 
 -- (fecha, puntaje) es la más efectiva de las dos debido a que el índice por fecha primero nos permitiría
