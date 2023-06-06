@@ -87,7 +87,7 @@ begin
 
     if existe_laboratorio then
         update medicamento
-        set precio = precio * porcentaje / 100
+        set precio = precio * (porcentaje / 100 + 1)
         where id_laboratorio = (select id_laboratorio from laboratorio l where laboratorio like $1);
         raise notice 'Se modificó exitosamente el precio del medicamento';
     end if;
