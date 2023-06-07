@@ -1,15 +1,21 @@
 -- Ejercicio 1
 begin;
 
-insert into consulta
-values ((select max(id_paciente) from paciente), 253, '2023-03-23', 5, '14:14:00', 'SE DIAGNOSTICA DERMATITIS');
-
-insert into paciente
-values ((select max(id_persona) + 1 from persona), 137);
-
 insert into persona
 values ((select max(id_persona) + 1 from persona), 'ALEJANDRA', 'HERRERA', 37366992, '1992-06-20', 'SAN JUAN 258',
         '54-381-326-1780');
+
+savepoint alta_persona;
+
+insert into paciente
+values ((select max(id_persona) from persona), 137);
+
+savepoint alta_paciente;
+
+insert into consulta
+values ((select max(id_paciente) from paciente), 253, '2023-03-23', 5, '14:14:00', 'SE DIAGNOSTICA DERMATITIS');
+
+savepoint alta_consulta;
 
 rollback;
 
@@ -28,6 +34,8 @@ where lab.id_laboratorio = me.id_laboratorio
   and cla.clasificacion like '%ANALGESICO%'
   and lab.laboratorio like '%ABBOTT LABORATORIOS%';
 
+savepoint abbott;
+
 update medicamento me
 set precio = precio * 0.965
 from laboratorio lab,
@@ -36,6 +44,8 @@ where lab.id_laboratorio = me.id_laboratorio
   and me.id_clasificacion = cla.id_clasificacion
   and cla.clasificacion like '%ANALGESICO%'
   and lab.laboratorio like '%BAYER QUIMICAS UNIDAS S.A%';
+
+savepoint bayer;
 
 update medicamento me
 set precio = precio * 1.08
@@ -46,6 +56,8 @@ where lab.id_laboratorio = me.id_laboratorio
   and cla.clasificacion like '%ANALGESICO%'
   and lab.laboratorio like '%COFANA (CONSORCIO FARMACEUTICO NACIONAL)%';
 
+savepoint cofana;
+
 update medicamento me
 set precio = precio * 0.96
 from laboratorio lab,
@@ -54,6 +66,8 @@ where lab.id_laboratorio = me.id_laboratorio
   and me.id_clasificacion = cla.id_clasificacion
   and cla.clasificacion like '%ANALGESICO%'
   and lab.laboratorio like '%FARPASA FARMACEUTICA DEL PACIFICO%';
+
+savepoint farpasa;
 
 update medicamento me
 set precio = precio * 0.898
@@ -64,6 +78,8 @@ where lab.id_laboratorio = me.id_laboratorio
   and cla.clasificacion like '%ANALGESICO%'
   and lab.laboratorio like '%RHONE POULENC ONCOLOGICOS%';
 
+savepoint rhone;
+
 update medicamento me
 set precio = precio * 1.055
 from laboratorio lab,
@@ -72,6 +88,8 @@ where lab.id_laboratorio = me.id_laboratorio
   and me.id_clasificacion = cla.id_clasificacion
   and cla.clasificacion like '%ANALGESICO%'
   and lab.laboratorio like '%ROEMMERS%';
+
+savepoint roemmers;
 
 update medicamento me
 set precio = precio * 1.07
@@ -84,14 +102,7 @@ where lab.id_laboratorio = me.id_laboratorio
       ('ABBOTT LABORATORIOS', 'BAYER QUIMICAS UNIDAS S.A', 'COFANA (CONSORCIO FARMACEUTICO NACIONAL)',
        'FARPASA FARMACEUTICA DEL PACIFICO', 'RHONE POULENC ONCOLOGICOS', 'ROEMMERS');
 
-select precio
-from medicamento
-         inner join laboratorio l on medicamento.id_laboratorio = l.id_laboratorio
-         inner join clasificacion c on medicamento.id_clasificacion = c.id_clasificacion
-where laboratorio like '%BAYER QUIMICAS UNIDAS S.A%'
-  and c.clasificacion like '%ANALGESICO%';
-
-rollback;
+savepoint ultima;
 
 commit;
 
@@ -103,27 +114,34 @@ begin;
 insert into estudio_realizado
 values (175363, 24, '2023-04-01', 15, 522, 'NORMAL', 'NO SE OBSERVAN IRREGULARIDADES', 3526.00);
 
+savepoint estudios_realizados;
+
 -- Apartado b
 insert into tratamiento
 values (175363, 1532, '2023-04-04', 253, 'AFRIN ADULTOS SOL', 'FRASCO X 15 CC', '1', 1821.79);
 
 insert into tratamiento
 values (175363, 1560, '2023-04-04', 253, 'NAFAZOL', 'FRASCO X 15 ML', '2', 1850.96);
+
 insert into tratamiento
 values (175363, 1522, '2023-04-04', 253, 'VIBROCIL GOTAS NAZALES', 'FRASCO X 15 CC', '2', 2500.66);
+
+savepoint tratamientos;
 
 -- Apartado c
 insert into internacion
 values (175363, 157, '2023-04-03', 253, '2023-04-06', '11:30:00', 160000.00);
 
-rollback;
+savepoint internacion;
 commit;
 
 -- Ejercicio 4
 begin;
 
 insert into factura
-values ((select max(id_factura) + 1 from factura), 175363, '2023-04-06', '00:00:00', 169699.41, 'N', 169699.41);
+values ((select max(id_factura) + 1 from factura),
+        (select id_persona from persona where nombre like '%ALEJANDRA%' and apellido like '%HERRERA%'),
+        '2023-04-06', '00:00:00', 169699.41, 'N', 169699.41);
 
 commit;
 
@@ -204,7 +222,6 @@ values ((select id_medicamento from medicamento where nombre like '%PEDIAFEN JAR
 
 savepoint pediafen;
 
-rollback;
 commit;
 
 -- Ejercicio 8
@@ -268,11 +285,10 @@ from tratamiento
 where id_medicamento = (select id_medicamento from medicamento where nombre like '%SALBUTOL GOTAS%');
 savepoint delete_tratamiento;
 
-rollback to delete_compra;
+savepoint delete_tratamiento;
 
 delete
 from medicamento
 where nombre like '%SALBUTOL GOTAS%';
 
-rollback;
 commit;
