@@ -27,7 +27,8 @@ begin
         select e.fecha_baja
         from persona p
                  inner join empleado e on p.id_persona = e.id_empleado
-        where p.dni like dni_buscado into fecha_auxiliar;
+        where p.dni like dni_buscado
+        into fecha_auxiliar;
 
         if fecha_auxiliar > nueva_fecha then
             raise exception 'Se quizó ingresar una fecha_ingreso mayor que la de baja';
@@ -42,7 +43,8 @@ begin
         select e.fecha_ingreso
         from persona p
                  inner join empleado e on p.id_persona = e.id_empleado
-        where p.dni like dni_buscado into fecha_auxiliar;
+        where p.dni like dni_buscado
+        into fecha_auxiliar;
 
         if fecha_auxiliar < nueva_fecha then
             raise exception 'Se quizó ingresar una fecha_baja menor que la de ingreso';
@@ -116,9 +118,8 @@ begin
         from laboratorio l
         where medicamento.id_laboratorio =
               (select id_laboratorio from laboratorio l where l.laboratorio like nombre_buscado limit 1);
-    end if;
 
-    if entidad = 'P' then
+    elseif entidad = 'P' then
         select exists(select 1 from proveedor l where l.proveedor like entidad) into existe;
 
         if not existe then
@@ -133,9 +134,8 @@ begin
                                              where c.id_proveedor in (select id_proveedor
                                                                       from proveedor p
                                                                       where p.proveedor like nombre_buscado));
-    end if;
 
-    if entidad = 'M' then
+    elseif entidad = 'M' then
         select exists(select 1 from medicamento m where m.nombre like nombre_buscado) into existe;
 
         if not existe then
@@ -156,21 +156,30 @@ $$ language plpgsql;
 -- un registro, la palabra “insert” o “delete” respectivamente, o en caso de realizar una
 -- modificación, debe ser el nuevo nombre del cargo que debe reemplazar al existente (el del
 -- primer parámetro).
+
 create or replace function fn_abm_cargos(nombre varchar(50), tipo varchar(50)) returns void
 as
 $$
 declare
     existe boolean;
 begin
-    if tipo like '%insert%' then
+    select exists(select 1 from cargo c where c.cargo like nombre) into existe;
+
+    if tipo like 'insert' then
+        if existe then
+            raise exception 'Se trató de insertar un cargo ya existente';
+        end if;
+
         insert into cargo values ((select max(id_cargo) + 1 from cargo), nombre);
-    elseif tipo like '%delete%' then
+    elseif tipo like 'delete' then
+        if not existe then
+            raise exception 'Se trató de eliminar un cargo que no existe';
+        end if;
+
         delete from cargo c where c.cargo like nombre;
     else
-        select exists(select 1 from cargo c where c.cargo like nombre) into existe;
-
         if not existe then
-            raise exception 'No existe el cargo que se debe modificar';
+            raise exception 'Se trató de modificar un cargo que no existe';
         end if;
 
         update cargo set cargo = tipo where cargo.cargo like nombre;
@@ -178,18 +187,344 @@ begin
     end if;
 
 end;
-
 $$
     language plpgsql;
 
-d) Realice UNA función que permite realizar alta en las tablas tipo_estudio, patología, clasificación
-y especialidad. Debe recibir dos parámetros, el primero el nombre de la tabla en la cual se
-quiere agregar la información y el segundo el valor del campo a agregar.
+-- d) Realice UNA función que permite realizar alta en las tablas tipo_estudio, patología, clasificación
+-- y especialidad. Debe recibir dos parámetros, el primero el nombre de la tabla en la cual se
+-- quiere agregar la información y el segundo el valor del campo a agregar.
 
-Ejercicio nro. 2:
-Realice las siguientes funciones para agregar funcionalidad al sistema. Para realizar esta tarea se
-recomienda usar los “tipos de datos” creados en el ejercicio 2 del TP5 o crear un tipo nuevo de ser
-necesario.
-a) Escriba una función que reciba el nombre de una obra social y devuelva un listado de todos
-los pacientes que cuentan con la misma. El listado debe tener id, nombre y apellido del
-paciente, nombre y sigla de la obra social.
+create or replace function fn_alta_estudio_patologia_clasificacion_especialidad(tabla varchar(20), valor varchar(75)) returns void
+as
+$$
+begin
+
+    if tabla like 'tipo_estudio' then
+        insert into tipo_estudio values ((select max(id_tipo) + 1 from tipo_estudio), valor);
+    elseif tabla like 'patología' then
+        insert into patologia values ((select max(id_patologia) + 1 from patologia), valor);
+    elseif tabla like 'clasificacion' then
+        insert into clasificacion values ((select max(id_clasificacion) + 1 from clasificacion), valor);
+    else
+        raise exception 'Se recibió un nombre de tabla inválido';
+    end if;
+
+end;
+$$
+    language plpgsql;
+
+-- Ejercicio nro. 2:
+-- Realice las siguientes funciones para agregar funcionalidad al sistema. Para realizar esta tarea se
+-- recomienda usar los “tipos de datos” creados en el ejercicio 2 del TP5 o crear un tipo nuevo de ser
+-- necesario.
+-- a) Escriba una función que reciba el nombre de una obra social y devuelva un listado de todos
+-- los pacientes que cuentan con la misma. El listado debe tener id, nombre y apellido del
+-- paciente, nombre y sigla de la obra social.
+
+drop type if exists tipo_obra_social_paciente;
+create type tipo_obra_social_paciente as
+(
+    id_paciente        int,
+    nombre_paciente    varchar(100),
+    apellido_paciente  varchar(100),
+    nombre_obra_social varchar(100),
+    sigla_obra_social  varchar(15)
+);
+
+create or replace function fn_listado_obra_social(obra_social_nombre varchar(20)) returns setof tipo_obra_social_paciente
+as
+$$
+declare
+    fila_buscada tipo_obra_social_paciente;
+    existe       boolean;
+begin
+
+    select exists(select 1 from obra_social ob where ob.nombre like obra_social_nombre) into existe;
+
+    if not existe then
+        raise exception 'No existe la obra social recibida';
+    end if;
+
+    for fila_buscada in select p.id_persona, p.nombre, p.apellido, ob.nombre, ob.sigla
+                        from obra_social ob
+                                 inner join paciente pa using (id_obra_social)
+                                 inner join persona p on pa.id_paciente = p.id_persona
+                        where ob.nombre like obra_social_nombre
+        loop
+            return next fila_buscada;
+        end loop;
+    return;
+end;
+$$
+    language plpgsql;
+
+select *
+from obra_social;
+select *
+from fn_listado_obra_social('OBRA SOCIAL PARA LA ACTIVIDAD DOCENTE');
+
+-- b) Escriba una función que reciba el nombre de un proveedor y entregue un listado con el
+-- código, nombre, clasificación de los medicamentos, nombre del laboratorio que los
+-- produce, nombre del proveedor y el precio que se pagó por dichos medicamentos.
+
+drop type if exists clasificacion_medicamento_laboratorio_proveedor;
+create type tipo_medicamento_laboratorio_proveedor as
+(
+    codigo_medicamento int,
+    medicamento        varchar(50),
+    clasificacion      varchar(75),
+    laboratorio        varchar(50),
+    proveedor          varchar(50),
+    precio             numeric(8, 2)
+);
+
+drop function fn_listado_proveedor_medicamento_laboratorio(varchar(100));
+create or replace function fn_listado_proveedor_medicamento_laboratorio(nombre_proveedor varchar(100)) returns setof tipo_medicamento_laboratorio_proveedor
+as
+$$
+declare
+    fila_buscada tipo_medicamento_laboratorio_proveedor;
+    existe       boolean;
+begin
+    select exists(select 1 from proveedor p where p.proveedor like nombre_proveedor) into existe;
+
+    if not existe then
+        raise exception 'No existe el proveedor reibido';
+    end if;
+
+    for fila_buscada in select m.id_medicamento, m.nombre, c.clasificacion, l.laboratorio, p.proveedor, m.precio
+                        from medicamento m
+                                 inner join clasificacion c using (id_clasificacion)
+                                 inner join laboratorio l using (id_laboratorio)
+                                 inner join compra co using (id_medicamento)
+                                 inner join proveedor p using (id_proveedor)
+                        where p.proveedor like nombre_proveedor
+        loop
+            return next fila_buscada;
+        end loop;
+    return;
+end;
+$$
+    language plpgsql;
+
+select *
+from proveedor;
+select *
+from fn_listado_proveedor_medicamento_laboratorio('QUIMICA SUIZA S.A.');
+
+-- c) Escriba una función que reciba una fecha y devuelva el listado de todas las consultas
+-- realizadas en esa fecha, además, debe mostrar el nombre y apellido del paciente, nombre y
+-- apellido del médico, y el nombre del consultorio donde se realizaron las consultas.
+
+drop type if exists tipo_paciente_medico_consultorio;
+create type tipo_paciente_medico_consultorio as
+(
+    nombre_paciente   varchar(100),
+    apellido_paciente varchar(100),
+    nombre_medico     varchar(100),
+    apellido_medico   varchar(100),
+    consultorio       varchar(100)
+);
+
+create or replace function fn_listado_paciente_medico_consultorio(fecha_buscada date) returns setof tipo_paciente_medico_consultorio
+as
+$$
+declare
+    fila_buscada tipo_paciente_medico_consultorio;
+begin
+    for fila_buscada in select pa.nombre, pa.apellido, me.nombre, me.apellido, co.nombre
+                        from consulta c
+                                 inner join consultorio co using (id_consultorio)
+                                 inner join paciente p using (id_paciente)
+                                 inner join persona pa on p.id_paciente = pa.id_persona
+                                 inner join empleado e using (id_empleado)
+                                 inner join persona me on me.id_persona = e.id_empleado
+                        where c.fecha = fecha_buscada
+        loop
+            return next fila_buscada;
+        end loop;
+    return;
+end;
+$$
+    language plpgsql;
+
+select *
+from consulta;
+select *
+from fn_listado_paciente_medico_consultorio('2019-01-01');
+
+-- d) Escriba una función que reciba el dni de un paciente y devuelva todas las internaciones que
+-- tuvo (aquellas en las que ya fue dado de alta). Se debe mostrar nombre y apellido del
+-- paciente, nombre y apellido del médico que ordenó la internación, fecha de alta y costo de
+-- las mismas.
+
+drop type if exists tipo_paciente_medico_internacion;
+create type tipo_paciente_medico_internacion as
+(
+    nombre_paciente   varchar(100),
+    apellido_paciente varchar(100),
+    nombre_medico     varchar(100),
+    apellido_medico   varchar(100),
+    fecha_alta        date,
+    costo             numeric(10, 2)
+);
+
+create or replace function fn_listado_internaciones_paciente_medico(dni_buscado varchar(8)) returns setof tipo_paciente_medico_internacion
+as
+$$
+declare
+    fila_buscada tipo_paciente_medico_internacion;
+    existe       boolean;
+begin
+
+    select exists(select 1 from persona p where p.dni like dni_buscado) into existe;
+
+    if not existe then
+        raise exception 'No existe un paciente con el DNI recibido';
+    end if;
+
+    for fila_buscada in select pa.nombre, pa.apellido, me.nombre, me.apellido, i.fecha_alta, i.costo
+                        from internacion i
+                                 inner join paciente p using (id_paciente)
+                                 inner join persona pa on p.id_paciente = pa.id_persona
+                                 inner join empleado e on i.ordena_internacion = e.id_empleado
+                                 inner join persona me on e.id_empleado = me.id_persona
+                        where pa.dni like dni_buscado
+        loop
+            return next fila_buscada;
+        end loop;
+    return;
+end;
+$$
+    language plpgsql;
+
+select dni
+from persona p
+         inner join paciente pa on p.id_persona = pa.id_paciente;
+select *
+from fn_listado_internaciones_paciente_medico('10101457');
+
+-- e) Escriba una función que reciba el nombre de un laboratorio y devuelva el código, nombre y
+-- stock de todos los medicamentos de dicho laboratorio, además, debe mostrar la
+-- clasificación de los mismos.
+
+drop type if exists tipo_medicamento_laboratorio_clasificacion;
+create type tipo_medicamento_laboratorio_clasificacion as
+(
+    id_medicamento     int,
+    nombre_medicamento varchar(50),
+    stock              int,
+    clasificacion      varchar(75)
+);
+
+create or replace function fn_listado_medicamento_laboratorio_clasificacion(laboratorio_buscado varchar(50)) returns setof tipo_medicamento_laboratorio_clasificacion
+as
+$$
+declare
+    fila_buscada tipo_medicamento_laboratorio_clasificacion;
+    existe       boolean;
+begin
+    select exists(select 1 from laboratorio l where l.laboratorio like laboratorio_buscado) into existe;
+
+    if not existe then
+        raise exception 'No existe el laboratorio recibido';
+    end if;
+
+    for fila_buscada in select m.id_medicamento, m.nombre, m.stock, c.clasificacion
+                        from medicamento m
+                                 inner join clasificacion c using (id_clasificacion)
+                                 inner join laboratorio l using (id_laboratorio)
+                        where l.laboratorio like laboratorio_buscado
+        loop
+            return next fila_buscada;
+        end loop;
+    return;
+end;
+$$
+    language plpgsql;
+
+select laboratorio
+from laboratorio l;
+select *
+from fn_listado_medicamento_laboratorio_clasificacion('CARRION LABORATORIOS');
+
+-- f) Escriba una función que reciba el dni de un paciente y muestre su nombre y apellido, y el
+-- número, fecha y monto de todas las facturas que se le emitieron.
+
+drop type if exists tipo_paciente_facturas;
+create type tipo_paciente_facturas as
+(
+    dni_paciente      varchar(8),
+    nombre_paciente   varchar(100),
+    apellido_paciente varchar(100),
+    id_factura        bigint,
+    fecha             date,
+    monto             numeric(10, 2)
+);
+
+create or replace function fn_paciente_facturas(dni_buscado varchar(8)) returns setof tipo_paciente_facturas
+as
+$$
+declare
+    fila_buscada tipo_paciente_facturas;
+    existe       boolean;
+begin
+    select exists(select 1
+                  from paciente pa
+                           inner join persona p on pa.id_paciente = p.id_persona
+                  where p.dni like dni_buscado)
+    into existe;
+
+    if not existe then
+        raise exception 'No existe un paciente con el DNI recibido';
+    end if;
+
+    for fila_buscada in select p.dni, p.nombre, p.apellido, f.id_factura, f.fecha, f.monto
+                        from factura f
+                                 inner join paciente pa using (id_paciente)
+                                 inner join persona p on pa.id_paciente = p.id_persona
+                        where p.dni like dni_buscado
+        loop
+            return next fila_buscada;
+        end loop;
+    return;
+end;
+$$
+    language plpgsql;
+
+select dni from paciente pa inner join persona p on pa.id_paciente = p.id_persona;
+select * from fn_paciente_facturas('7374196');
+
+-- g) Escriba una función que reciba el dni de un empleado y muestre su nombre y apellido,
+-- nombre y marca de los equipos y la fecha de ingreso y estado de los mismos (equipos que
+-- reparó dicho empleado).
+
+-- h) Escriba una función que muestre el listado de las facturas indicando el número, fecha y
+-- monto de las mismas, nombre y apellido del paciente, y una columna donde se indique un
+-- mensaje en base al saldo pendiente. Si el saldo es menor que 500.000 en la columna se debe
+-- mostrar “El cobro puede esperar”, si es mayor que 500.000 mostrar “Cobrar prioridad” y si
+-- es mayor a 1.000.000 mostrar “Cobrar urgente”.
+
+-- i) Escriba UNA función que liste todos los registros de alguna de las siguientes tablas: cargo,
+-- clasificaciones, especialidad, patología y tipo_estudio. No use estructuras de control para
+-- decidir que tabla mostrar, solo debe averiguar si el parámetro pasado a la función coincide
+-- con el nombre de alguna de las tablas requeridas.
+--
+-- Ejercicio nro. 3:
+-- Plantee e implemente la o las funciones necesarias para realizar las siguientes tareas:
+-- a) Cuando una cama entra en mantenimiento se agrega un registro en la tabla
+-- mantenimiento_cama con datos en los campos obligatorios y en el campo estado.
+-- Finalmente, cuando es arreglada se completa la fecha de egreso y quien fue el empleado
+-- que la arregló, también se actualiza el campo estado de dicha tabla y el campo estado de la
+-- tabla cama. Implemente la funcionalidad cuando una cama es arreglada (tenga en cuenta
+-- que puede suceder que la cama no tenga arreglo y deba quedar fuera de servicio).
+
+-- b) Cuando se interna a un paciente se agregar un registro en la tabla internación solo con los
+-- campos obligatorios, recién cuando se da de alta se completan los otros 3 campos de la
+-- internación, además, se emite una factura por el monto de la internación. Implemente la
+-- funcionalidad cuando se da de alta a un paciente.
+
+-- c) No todas las consultas médicas tienen un diagnóstico porque a veces se espera el resultado
+-- de algún estudio para dar con el mismo. Pero cuando se llega a un diagnóstico se indica un
+-- tratamiento. Implemente la funcionalidad para asignar un diagnóstico e indicar un
+-- tratamiento.
