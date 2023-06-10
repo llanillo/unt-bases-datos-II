@@ -1,4 +1,4 @@
-- Ejercicio nro. 1:
+--  Ejercicio nro. 1:
 -- Para mejorar y automatizar el funcionamiento de la base de datos “Hospital” realice las siguientes
 -- tareas:
 -- a) Escriba un procedimiento almacenado (SP) para agregar registros a la tabla persona. Reciba
