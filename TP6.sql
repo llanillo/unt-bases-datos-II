@@ -1,4 +1,4 @@
--- Ejercicio nro. 1:
+- Ejercicio nro. 1:
 -- Para mejorar y automatizar el funcionamiento de la base de datos “Hospital” realice las siguientes
 -- tareas:
 -- a) Escriba un procedimiento almacenado (SP) para agregar registros a la tabla persona. Reciba
@@ -11,8 +11,7 @@ create or replace procedure sp_persona_alta(nombre varchar(100), apellido varcha
                                             telefono varchar(15)) AS
 $$
 BEGIN
-    insert into persona
-    values ((select max(id_persona) + 1 from persona), $1, $2, $3, $4, $5, $6);
+    insert into persona values ((select max(id_persona) + 1 from persona), $1, $2, $3, $4, $5, $6);
     raise notice 'Se insertó la persona %, % de manera exitosa', $1, $2;
 exception
     when others then
@@ -37,14 +36,16 @@ BEGIN
     select exists(select 1 from especialidad e where e.especialidad like $2) into existe_especialidad;
     select exists(select 1 from cargo c where c.cargo like $3) into existe_cargo;
 
-    if existe_persona and existe_especialidad and existe_cargo then
-        insert into empleado
-        values ((select id_persona from persona p where p.dni like $1),
-                (select id_especialidad from especialidad e where e.especialidad like $2),
-                (select cargo from cargo c where c.cargo like $3),
-                (select current_date), $4, null);
-        raise notice 'Se insertó el empleado de manera exitosa';
+    if not existe_cargo or not existe_especialidad or not existe_persona then
+        raise exception 'No existe el cargo o la especialidad o la persona';
     end if;
+
+    insert into empleado
+    values ((select id_persona from persona p where p.dni like $1),
+            (select id_especialidad from especialidad e where e.especialidad like $2),
+            (select cargo from cargo c where c.cargo like $3),
+            (select current_date), $4, null);
+    raise notice 'Se insertó el empleado de manera exitosa';
 exception
     when others then
         raise exception 'Error en la inserción de la persona %', SQLERRM;
@@ -63,10 +64,12 @@ declare
 begin
     select exists(select 1 from factura f where f.id_factura = $1) into existe_factura;
 
-    if (existe_factura) then
-        update factura set saldo = saldo - $2 where id_factura = $1;
-        raise notice 'Se modificó correctamente la factura';
+    if not existe_factura then
+        raise exception 'No exiset la factura';
     end if;
+
+    update factura set saldo = saldo - $2 where id_factura = $1;
+    raise notice 'Se modificó correctamente la factura';
 
 exception
     when others then raise exception 'Error en la modificación del saldo de la factura %', SQLERRM;
@@ -85,15 +88,15 @@ declare
 begin
     select exists(select 1 from laboratorio l where l.laboratorio like $1) into existe_laboratorio;
 
-    if existe_laboratorio then
-        update medicamento
-        set precio = precio * (porcentaje / 100 + 1)
-        where id_laboratorio = (select id_laboratorio from laboratorio l where laboratorio like $1);
-        raise notice 'Se modificó exitosamente el precio del medicamento';
+    if not existe_laboratorio then
+        raise exception 'Error en la modificación del precio del medicamento %', SQLERRM;
     end if;
 
-exception
-    when others then raise exception 'Error en la modificación del precio del medicamento %', SQLERRM;
+    update medicamento
+    set precio = precio * (porcentaje / 100 + 1)
+    where id_laboratorio = (select id_laboratorio from laboratorio l where laboratorio like $1);
+    raise notice 'Se modificó exitosamente el precio del medicamento';
+
 end;
 $$ language plpgsql;
 
@@ -108,18 +111,19 @@ declare
     id_medicamento_a_borrar int;
     existe_medicamento      bool;
 begin
-    select id_medicamento from medicamento m where m.nombre like nombre_medicamento into id_medicamento_a_borrar;
     select exists(select id_medicamento from medicamento m where m.nombre like nombre_medicamento);
 
-    if existe_medicamento then
-        update tratamiento set id_medicamento = null where id_medicamento = id_medicamento_a_borrar;
-        delete from compra where id_medicamento = id_medicamento_a_borrar;
-        delete from medicamento where id_medicamento = id_medicamento_a_borrar;
-
-        raise notice 'Se elimino exitosamente el medicamento de la base de datos (Incluyendo todas sus referencias)';
+    if not existe_medicamento then
+        raise exception 'Error en la eliminación del medicamento %', SQLERRM;
     end if;
-exception
-    when others then raise exception 'Error en la eliminación del medicamento %', SQLERRM;
+
+    select id_medicamento from medicamento m where m.nombre like nombre_medicamento into id_medicamento_a_borrar;
+
+    update tratamiento set id_medicamento = null where id_medicamento = id_medicamento_a_borrar;
+    delete from compra where id_medicamento = id_medicamento_a_borrar;
+    delete from medicamento where id_medicamento = id_medicamento_a_borrar;
+
+    raise notice 'Se elimino exitosamente el medicamento de la base de datos (Incluyendo todas sus referencias)';
 
 end;
 $$ language plpgsql;
@@ -133,16 +137,10 @@ create or replace procedure sp_paciente_obtener(dni_buscado varchar(8))
 as
 $$
 declare
-    existe_paciente   bool;
     paciente_obtenido persona;
 begin
-
-    select exists(select 1 from persona p where p.dni like $1) into existe_paciente;
-
-    if existe_paciente then
-        select * from persona p where dni like $1 into paciente_obtenido;
-        raise notice 'El paciente es %, %', paciente_obtenido.nombre, paciente_obtenido.apellido;
-    end if;
+    select * from persona p where dni like $1 into paciente_obtenido;
+    raise notice 'El paciente es %, %', paciente_obtenido.nombre, paciente_obtenido.apellido;
 exception
     when others then raise exception 'Errors en la búsqueda del paciente %', SQLERRM;
 end;
@@ -155,16 +153,10 @@ create or replace procedure sp_medicamento_precio_stock(nombre_medicamento varch
 as
 $$
 declare
-    existe_medicamento  bool;
     medicamento_buscado medicamento;
 begin
-    select exists(select 1 from medicamento m where nombre like $1) into existe_medicamento;
-
-    if existe_medicamento then
-        select * from medicamento m where nombre like $1 into medicamento_buscado;
-        raise notice 'El medicamento tiene precio % y stock %', medicamento_buscado.precio, medicamento_buscado.stock;
-    end if;
-
+    select * from medicamento m where nombre like $1 into medicamento_buscado;
+    raise notice 'El medicamento tiene precio % y stock %', medicamento_buscado.precio, medicamento_buscado.stock;
 exception
     when others then raise exception 'Error en la búsqueda del medicamento %', SQLERRM;
 end;
