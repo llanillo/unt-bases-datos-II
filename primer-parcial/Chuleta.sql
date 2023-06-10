@@ -1,4 +1,11 @@
--- UPDATE
+-- PDATE
+-- OPCIÓN A
+update medicamento
+set precio = precio * 1.02
+where id_laboratorio = (select id_laboratorio from laboratorio where laboratorio like 'ABBOTT LABORATORIOS')
+  and id_clasificacion in (select id_clasificacion from clasificacion where clasificacion like '%ANALGESICO%');
+
+-- OPCIÓN B
 update medicamento me
 set precio = precio * 1.02
 from laboratorio lab,
@@ -43,15 +50,27 @@ create index index_compra on compra (cantidad) where compra.cantidad > 50;
 
 drop role grupo_informes;
 
+-- GRUPOS
 create role grupo_informes with
     nosuperuser
     nocreatedb
     nocreaterole
     nocreateuser
     inherit
+    nologin
+    noreplication;
+
+-- USUARIO
+create role usuario_pepe with
     login
-    connection limit -1
-    valid until 'infinity';
+    nosuperuser
+    nocreatedb
+    nocreaterole
+    inherit
+    noreplication
+    connection
+        limit -1
+    password '1234';
 
 -- ALTER ROLE User_name WITH NOCREATEDB NOCREATEUSER
 -- PASSWORD 'n3WP4s4’ VALID UNTIL ’2022-01-01’;
