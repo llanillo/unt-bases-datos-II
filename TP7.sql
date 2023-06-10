@@ -492,12 +492,61 @@ end;
 $$
     language plpgsql;
 
-select dni from paciente pa inner join persona p on pa.id_paciente = p.id_persona;
-select * from fn_paciente_facturas('7374196');
+select dni
+from paciente pa
+         inner join persona p on pa.id_paciente = p.id_persona;
+select *
+from fn_paciente_facturas('7374196');
 
 -- g) Escriba una función que reciba el dni de un empleado y muestre su nombre y apellido,
 -- nombre y marca de los equipos y la fecha de ingreso y estado de los mismos (equipos que
 -- reparó dicho empleado).
+
+create type tipo_empleado_equipos as
+(
+    nombre_empleado      varchar(100),
+    apellido_empleado    varchar(100),
+    nombre_equipo        varchar(100),
+    marca_equipo         varchar(50),
+    fecha_ingreso_equipo date,
+    estado_equipo        varchar(25)
+);
+
+create or replace function fn_listado_empleado_equipos(dni_buscado varchar(8)) returns setof tipo_empleado_equipos
+as
+$$
+declare
+    fila_buscada tipo_empleado_equipos;
+    existe       boolean;
+begin
+    select exists(select 1 from persona p where p.dni like dni_buscado) into existe;
+
+    if not existe then
+        raise exception 'No existe el empleado por el DNI recibido';
+    end if;
+
+    for fila_buscada in select p.nombre, p.apellido, e.nombre, e.marca, me.fecha_ingreso, me.estado
+                        from equipo e
+                                 inner join mantenimiento_equipo me using (id_equipo)
+                                 inner join empleado em using (id_empleado)
+                                 inner join persona p on em.id_empleado = p.id_persona
+                        where p.dni like dni_buscado
+        loop
+            return next fila_buscada;
+        end loop;
+    return;
+end;
+$$
+    language plpgsql;
+
+select dni
+from empleado em
+         inner join persona p on em.id_empleado = p.id_persona
+         inner join mantenimiento_equipo me using (id_empleado)
+         inner join equipo eq using (id_equipo);
+
+select *
+from fn_listado_empleado_equipos('40201463');
 
 -- h) Escriba una función que muestre el listado de las facturas indicando el número, fecha y
 -- monto de las mismas, nombre y apellido del paciente, y una columna donde se indique un
@@ -505,13 +554,83 @@ select * from fn_paciente_facturas('7374196');
 -- mostrar “El cobro puede esperar”, si es mayor que 500.000 mostrar “Cobrar prioridad” y si
 -- es mayor a 1.000.000 mostrar “Cobrar urgente”.
 
+drop type if exists tipo_factura_paciente_saldo;
+create type tipo_factura_paciente_saldo as
+(
+    id_factura        bigint,
+    fecha_factura     date,
+    monto             numeric(10, 2),
+    nombre_paciente   varchar(100),
+    apellido_paciente varchar(100),
+    saldo_pendiente   varchar(250)
+);
+
+create or replace function fn_mensaje_saldo_pendiente(saldo_pendiente numeric(10, 2)) returns varchar(250)
+as
+$$
+declare
+    salida varchar(250);
+begin
+    if saldo_pendiente <= 500000 then
+        salida := 'El cobro puede esperar';
+    elseif saldo_pendiente > 500000 then
+        salida := 'Cobrar prioridad';
+    elseif saldo_pendiente > 1000000 then
+        salida := 'Cobrar urgente';
+    else
+        salida := 'Indefinido';
+    end if;
+
+    return salida;
+end;
+$$
+    language plpgsql;
+
+create or replace function fn_listado_saldo_facturas_paciente() returns setof tipo_factura_paciente_saldo
+as
+$$
+declare
+    mensaje_resultado varchar(250);
+    fila_buscada      tipo_factura_paciente_saldo;
+begin
+    for fila_buscada in select f.id_factura, f.fecha, f.monto, p.nombre, p.apellido, fn_mensaje_saldo_pendiente(f.saldo)
+                        from factura f
+                                 inner join paciente pa using (id_paciente)
+                                 inner join persona p on pa.id_paciente = p.id_persona
+        loop
+            return next fila_buscada;
+        end loop;
+    return;
+end;
+$$
+    language plpgsql;
+
+select *
+from fn_listado_saldo_facturas_paciente();
+
 -- i) Escriba UNA función que liste todos los registros de alguna de las siguientes tablas: cargo,
 -- clasificaciones, especialidad, patología y tipo_estudio. No use estructuras de control para
 -- decidir que tabla mostrar, solo debe averiguar si el parámetro pasado a la función coincide
 -- con el nombre de alguna de las tablas requeridas.
---
+
+create or replace function fn_listado_multiples_tablas(nombre_tabla text) returns setof record
+as
+$$
+begin
+    if nombre_tabla not in ('cargo', 'clasificaciones', 'especialidad', 'patologia', 'tipo_estudio') then
+        raise exception 'El nombre de tabla es inválido';
+    end if;
+
+    return query execute format('select * from %I', $1);
+end;
+$$ language plpgsql;
+
+select *
+from fn_listado_multiples_tablas('cargo') as (id_cargo integer, cargo varchar(50));
+
 -- Ejercicio nro. 3:
 -- Plantee e implemente la o las funciones necesarias para realizar las siguientes tareas:
+
 -- a) Cuando una cama entra en mantenimiento se agrega un registro en la tabla
 -- mantenimiento_cama con datos en los campos obligatorios y en el campo estado.
 -- Finalmente, cuando es arreglada se completa la fecha de egreso y quien fue el empleado
@@ -519,12 +638,153 @@ select * from fn_paciente_facturas('7374196');
 -- tabla cama. Implemente la funcionalidad cuando una cama es arreglada (tenga en cuenta
 -- que puede suceder que la cama no tenga arreglo y deba quedar fuera de servicio).
 
+create or replace function fn_arreglar_cama(dni_empleado varchar(8), id_cama_arreglada smallint,
+                                            nuevo_estado_cama varchar(25)) returns cama
+as
+$$
+declare
+    existe_cama          boolean;
+    salida               cama;
+    id_empeado_reparador int;
+begin
+    select exists(select 1 from cama c where c.id_cama = id_cama_arreglada) into existe_cama;
+
+    if not existe_cama then
+        raise exception 'No existe una cama con el ID recibido';
+    end if;
+
+    select id_empleado
+    from empleado em
+             inner join persona p on em.id_empleado = p.id_persona
+    where p.dni like dni_empleado
+    into id_empeado_reparador;
+
+    if not found then
+        raise exception 'No existe un empleado con el DNI recibido';
+    end if;
+
+    if nuevo_estado_cama not in ('OK', 'EN REPARACION', 'FUERA DE SERVICIO') then
+        raise exception 'Se ingresó un estado inválido';
+    end if;
+--
+    update mantenimiento_cama mc
+    set fecha_egreso = current_date,
+        id_empleado  = id_empeado_reparador,
+        estado       = nuevo_estado_cama
+    from cama c
+    where c.id_cama = mc.id_cama;
+
+    update cama c set estado = nuevo_estado_cama where c.id_cama = id_cama_arreglada returning * into salida;
+
+    if nuevo_estado_cama = 'FUERA DE SERVICIO' then
+        update internacion it set id_cama = null where it.id_cama = id_cama_arreglada;
+    end if;
+
+    return salida;
+end;
+$$
+    language plpgsql;
+
+select *
+from fn_arreglar_cama('21936475', '90', 'OK');
+
+select * from mantenimiento_cama mc where mc.id_cama = '90';
+
 -- b) Cuando se interna a un paciente se agregar un registro en la tabla internación solo con los
 -- campos obligatorios, recién cuando se da de alta se completan los otros 3 campos de la
 -- internación, además, se emite una factura por el monto de la internación. Implemente la
 -- funcionalidad cuando se da de alta a un paciente.
 
+-- TODO Esta malo porque el producto del costo con los días da un resultado grande y da desbordamiento la asignación con el campo costo de la tabla
+create or replace function fn_alta_paciente(dni_paciente varchar(8)) returns factura
+as
+$$
+declare
+    existe           boolean;
+    fecha_actual     date;
+    hora_actual      time;
+    fila_internacion record;
+    costo_final      numeric(12, 2);
+    dias_interado    int;
+    salida           factura;
+begin
+    -- Comprueba que existe la persona
+    select exists(select 1 from persona p where p.dni like dni_paciente) into existe;
+
+    if not existe then
+        raise exception 'No existe una persona con el DNI recibido';
+    end if;
+
+    -- Guarda la intrernación del paciente para calcular costo, días de internación, etc
+    select *
+    from internacion it
+             inner join paciente pa using (id_paciente)
+             inner join persona p on pa.id_paciente = p.id_persona
+             inner join cama c using (id_cama)
+             inner join habitacion h using (id_habitacion)
+    into fila_internacion;
+
+    hora_actual := current_time;
+    fecha_actual := current_date;
+    dias_interado := fecha_actual - fila_internacion.fecha_inicio;
+    costo_final := fila_internacion.precio * dias_interado;
+
+    -- Actualiza la internación
+    update
+        internacion it
+    set fecha_alta = fecha_actual,
+        hora       = hora_actual,
+        costo      = costo_final::numeric(10, 2) -- TODO El enuncia no explica como calcular el costo
+    from paciente pa
+             inner join persona p on pa.id_paciente = p.id_persona
+    where p.dni like dni_paciente
+      and it.id_paciente = pa.id_paciente;
+
+    -- Crea la nueva factura
+    insert into factura
+    values ((select max(id_factura) + 1 from factura),
+            (select p.id_persona from persona p where p.dni like dni_paciente), fecha_actual, hora_actual, costo_final,
+            'N', 0)
+    into salida;
+
+    return salida;
+end;
+$$
+    language plpgsql;
+
+select dni
+from paciente pa
+         inner join persona p on pa.id_paciente = p.id_persona;
+
+insert into internacion
+values ((select id_persona from persona p where p.dni like '37870755'),
+        (select id_cama from cama c where c.estado like '%OK%' limit 1), current_date, 131);
+
+select *
+from internacion it
+         inner join paciente pa using (id_paciente)
+         inner join persona p on pa.id_paciente = p.id_persona
+where p.dni like '37870755';
+
+select *
+from fn_alta_paciente('37870755');
+
+select *
+from factura f
+         inner join paciente pa using (id_paciente)
+         inner join persona p on pa.id_paciente = p.id_persona
+where p.dni like '37870755';
+
 -- c) No todas las consultas médicas tienen un diagnóstico porque a veces se espera el resultado
 -- de algún estudio para dar con el mismo. Pero cuando se llega a un diagnóstico se indica un
 -- tratamiento. Implemente la funcionalidad para asignar un diagnóstico e indicar un
 -- tratamiento.
+
+select *
+from diagnostico;
+select *
+from patologia;
+select *
+from consulta;
+select *
+from tratamiento;
