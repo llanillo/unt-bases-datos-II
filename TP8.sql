@@ -328,11 +328,6 @@ declare
     diferencia_sueldo numeric(9, 2);
     estado_sueldo     varchar(25);
 begin
-    select *
-    from persona p
-             inner join public.empleado e on p.id_persona = new.id_empleado
-    into datos_empleado;
-
     create table if not exists audita_empleado_sueldo
     (
         id          serial not null,
@@ -347,6 +342,11 @@ begin
         diferencia  numeric(9, 2),
         estado      VARCHAR(25)
     );
+
+    select *
+    from persona p
+             inner join public.empleado e on p.id_persona = new.id_empleado
+    into datos_empleado;
 
     if tg_op = 'update' then
         diferencia_sueldo := abs(old.sueldo - new.sueldo);
@@ -379,21 +379,21 @@ execute procedure fn_audita_empleado_sueldo();
 -- tratamiendo_borrado, según corresponda, los campos de las nuevas tablas serán los mismos
 -- que los de las tablas originales.
 
-create table if not exists audita_tablas_sistema
-(
-    id                   serial       not null,
-    usuario              varchar(50)  not null,
-    fecha                date         not null,
-    id_paciente          int          not null,
-    fecha_consulta       date         not null,
-    tratamiento          varchar(50)  not null,
-    nombre_tabla_borrado varchar(100) not null
-);
 
 create or replace function fn_audita_tablas_sistema() returns trigger
 as
 $tr_audita_tablas_sistema$
 begin
+    create table if not exists audita_tablas_sistema
+    (
+        id                   serial       not null,
+        usuario              varchar(50)  not null,
+        fecha                date         not null,
+        id_paciente          int          not null,
+        fecha_consulta       date         not null,
+        nombre_tabla_borrado varchar(100) not null
+    );
+
     if tg_table_name = 'consulta' then
         create table if not exists consulta_borrada
         (
@@ -404,6 +404,8 @@ begin
             hora           time,
             resultado      varchar(100)
         );
+
+        insert into audita_tablas_sistema values (default, user, now(), old.id_paciente, old.fecha, tg_table_name);
 
         insert into consulta_borrada
         values (old.id_paciente, old.id_empleado, old.fecha, old.id_consultorio, old.hora, old.resultado);
@@ -420,6 +422,13 @@ begin
             observacion varchar(100),
             precio      numeric(10, 2)
         );
+
+        insert into audita_tablas_sistema values (default, user, now(), old.id_paciente, old.fecha, tg_table_name);
+
+        insert into estudio_borrado
+        values (old.id_paciente, old.id_estudio, old.fecha, old.id_equipo, old.id_empleado, old.resultado,
+                old.observacion, old.precio);
+
     elseif tg_table_name = 'tratamiento' then
         create table if not exists tratamiento_borrado
         (
@@ -432,9 +441,18 @@ begin
             dosis            integer,
             costo            numeric(10, 2)
         );
+
+        insert into audita_tablas_sistema
+        values (default, user, now(), old.id_paciente, old.fecha_indicacion, tg_table_name);
+
+        insert into tratamiento_borrado
+        values (old.id_paciente, old.id_medicamento, old.fecha_indicacion, old.preescribe, old.nombre, old.descripcion,
+                old.dosis, old.costo);
     else
         raise exception 'Se llamó esta función sobre una tabla errada';
     end if;
+
+    return old;
 end;
 $tr_audita_tablas_sistema$
     language plpgsql;
