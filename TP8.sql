@@ -59,7 +59,7 @@ end;
 $tr_altatratamiento$
     language plpgsql;
 
-create trigger tr_alta_tratamiento
+create or replace trigger tr_alta_tratamiento
     before insert
     on tratamiento
     for each row
@@ -86,7 +86,7 @@ end;
 $tr_alta_compra$
     language plpgsql;
 
-create trigger tr_alta_compra
+create or replace trigger tr_alta_compra
     before insert
     on compra
     for each row
@@ -124,7 +124,7 @@ end;
 $tr_pago_factura$
     language plpgsql;
 
-create trigger tr_pago_factura
+create or replace trigger tr_pago_factura
     before insert
     on pago
     for each row
@@ -153,7 +153,7 @@ end;
 $tr_borrado_pago$
     language plpgsql;
 
-create trigger tr_borrado_pago
+create or replace trigger tr_borrado_pago
     before delete
     on pago
     for each row
@@ -168,11 +168,11 @@ execute procedure fn_borrado_pago();
 -- ninguna acción. Tenga en cuenta que puede darse el caso que el registro de dicho medicamento
 -- ya exista en la tabla medicamento_reponer, en tal caso solo debe actualizar el campo stock.
 
-create or replace function fn_modificar_medicamento() returns trigger
+create or replace function fn_modificar_stock_medicamento_menor_50() returns trigger
 as
-$tr_modificar_medicamento$
+$tr_modificar_stock_medicamento_menor_50$
 declare
-
+    existe_medicamento_reponer boolean;
 begin
     create table if not exists medicamento_reponer
     (
@@ -184,22 +184,75 @@ begin
         proveedor      varchar(50) not null
     );
 
-end;
+    select exists(select 1 from medicamento_reponer m where m.id_medicamento = new.id_medicamento)
+    into existe_medicamento_reponer;
 
-$tr_modificar_medicamento$
+    if new.stock >= 50 then
+        return old;
+    end if;
+
+    if existe_medicamento_reponer then
+        update medicamento_reponer m set stock = new.stock where m.id_medicamento = new.id_medicamento;
+    else
+        insert into medicamento_reponer
+        values (new.id_medicamento, new.nombre, new.presentacion, new.stock, new.precio, (select proveedor
+                                                                                          from proveedor p
+                                                                                                   inner join compra c using (id_proveedor)
+                                                                                          where c.id_medicamento = new.id_medicamento
+                                                                                          limit 1));
+    end if;
+
+    return new;
+end;
+$tr_modificar_stock_medicamento_menor_50$
     language plpgsql;
-create trigger tr_modificar_medicamento
+
+create or replace trigger tr_modificar_stock_medicamento_menor_50
     before update
     on medicamento
     for each row
     when (old.stock < new.stock)
-execute procedure fn_modificar_medicamento();
+execute procedure fn_modificar_stock_medicamento_menor_50();
 
 -- f) Cada vez que se modifique el stock de un medicamento, solo si es por un valor mayor (cuando
 -- se hace una compra), debe buscar si existe el registro en la tabla medicamento_reponer, y si el
 -- nuevo valor del stock (stock + cantidad) es mayor a 50, debe eliminar el registro de dicha tabla,
 -- de lo contrario, debe modificar el campo stock de la tabla medicamento_reponer, por el nuevo
 -- stock de la tabla medicamento.
+create or replace function fn_modificar_stock_medicamento_mayor() returns trigger
+as
+$tr_modificar_stock_medicamento_mayor$
+declare
+    existe_medicamento_reponer boolean;
+    compra_medicamento         compra;
+begin
+    select exists(select 1 from medicamento_reponer m where m.id_medicamento = new.id_medicamento)
+    into existe_medicamento_reponer;
+
+    if existe_medicamento_reponer then
+        select * from compra c where c.id_medicamento = new.id_medicamento limit 1 into compra_medicamento;
+
+        if compra_medicamento.cantidad + new.stock > 50 then
+            delete from medicamento_reponer m where id_medicamento = new.id_medicamento;
+        else
+            update medicamento_reponer mr
+            set stock = compra_medicamento.cantidad + new.stock
+            where mr.id_medicamento = new.id_medicamento;
+        end if;
+
+    end if;
+
+    return new;
+end;
+$tr_modificar_stock_medicamento_mayor$
+    language plpgsql;
+
+create or replace trigger tr_modificar_stock_medicamento_mayor
+    before update
+    on medicamento
+    for each row
+    when ( new.stock >= old.stock )
+execute procedure fn_modificar_stock_medicamento_mayor();
 
 -- Ejercicio nro. 3:
 -- Realice las siguientes auditorías por trigger.
@@ -216,6 +269,46 @@ execute procedure fn_modificar_medicamento();
 -- “viejo” en el campo estado debe guardar la palabra “antes” y para el registro “nuevo” el estado
 -- debe decir “después”.
 
+create or replace function fn_auditoria_medicamento() returns trigger
+as
+$tr_auditoria_medicamento$
+begin
+    create table if not exists audita_medicamento
+    (
+        id               serial        not null
+            constraint "PK" primary key,
+        usuario          varchar(50),
+        fecha            date,
+        operacion        character,
+        estado           varchar(100),
+        id_medicamento   integer       not null,
+        id_clasificacion smallint      not null,
+        id_laboratorio   smallint      not null,
+        nombre           varchar(50)   not null,
+        presentacion     varchar(50)   not null,
+        precio           numeric(8, 2) not null,
+        stock            integer
+    );
+
+    if tg_op = 'delete' then
+        insert into audita_medicamento values (default, user, now(), 'D', 'Baja', new);
+        return old;
+    elseif tg_op = 'insert' then
+        insert into audita_medicamento values (default, user, now(), 'I', 'Alta', new);
+        return new;
+    elseif tg_op = 'update' then
+        insert into audita_medicamento values (default, user, now(), 'U', 'Nuevo', new);
+        insert into audita_medicamento values (default, user, now(), 'U', 'Antes', old);
+        return new;
+    end if;
+end;
+$tr_auditoria_medicamento$ language plpgsql;
+
+create or replace trigger tr_auditoria_medicamento
+    after insert or delete or update
+    on medicamento
+    for each row
+execute procedure fn_auditoria_medicamento();
 
 -- b) Auditoría de empleados: debe guardar los datos en una tabla llamada audita_empleado_sueldo
 -- cuyos campos serán: id (serial), usuario, fecha, id_empleado, dni, nombre y apellido del
@@ -227,6 +320,55 @@ execute procedure fn_modificar_medicamento();
 -- empleado, cualquier otra operación realizada en la tabla Empleado debe ser ignorada por esta
 -- auditoría.
 
+create or replace function fn_audita_empleado_sueldo() returns trigger
+as
+$tr_audita_empleado_sueldo$
+declare
+    datos_empleado    persona;
+    diferencia_sueldo numeric(9, 2);
+    estado_sueldo     varchar(25);
+begin
+    select *
+    from persona p
+             inner join public.empleado e on p.id_persona = new.id_empleado
+    into datos_empleado;
+
+    create table if not exists audita_empleado_sueldo
+    (
+        id          serial not null,
+        usuario     varchar(50),
+        fecha       date,
+        id_empleado int    not null,
+        dni         varchar(8),
+        nombre      varchar(50),
+        apellido    varchar(50),
+        sueldo_v    numeric(9, 2),
+        sueldo_n    numeric(9, 2),
+        diferencia  numeric(9, 2),
+        estado      VARCHAR(25)
+    );
+
+    if tg_op = 'update' then
+        diferencia_sueldo := abs(old.sueldo - new.sueldo);
+        case
+            when old.sueldo > new.sueldo then estado_sueldo := 'Descuento';
+            when new.sueldo >= old.sueldo then estado_sueldo := 'Aumento';
+            end case;
+
+        insert into audita_empleado_sueldo
+        values (default, user, now(), datos_empleado.id_persona, datos_empleado.dni, datos_empleado.nombre,
+                datos_empleado.apellido, old.sueldo, new.sueldo, diferencia_sueldo, estado_sueldo);
+    end if;
+end;
+$tr_audita_empleado_sueldo$
+    language plpgsql;
+
+create or replace trigger tr_audita_empleado_sueldo
+    before update
+    on empleado
+    for each row
+    when (old.sueldo != new.sueldo )
+execute procedure fn_audita_empleado_sueldo();
 
 -- c) Auditoría de tablas: debe guardar los datos en una nueva tabla llamada audita_tablas_sistema
 -- cada vez que se elimine una consulta, un estudio realizado o un tratamiento cuyos campos serán:
@@ -236,3 +378,81 @@ execute procedure fn_modificar_medicamento();
 -- guardar el registro borrado en una tabla llamada estudio_borrado, consulta_borrada o
 -- tratamiendo_borrado, según corresponda, los campos de las nuevas tablas serán los mismos
 -- que los de las tablas originales.
+
+create table if not exists audita_tablas_sistema
+(
+    id                   serial       not null,
+    usuario              varchar(50)  not null,
+    fecha                date         not null,
+    id_paciente          int          not null,
+    fecha_consulta       date         not null,
+    tratamiento          varchar(50)  not null,
+    nombre_tabla_borrado varchar(100) not null
+);
+
+create or replace function fn_audita_tablas_sistema() returns trigger
+as
+$tr_audita_tablas_sistema$
+begin
+    if tg_table_name = 'consulta' then
+        create table if not exists consulta_borrada
+        (
+            id_paciente    integer  not null,
+            id_empleado    integer  not null,
+            fecha          date     not null,
+            id_consultorio smallint not null,
+            hora           time,
+            resultado      varchar(100)
+        );
+
+        insert into consulta_borrada
+        values (old.id_paciente, old.id_empleado, old.fecha, old.id_consultorio, old.hora, old.resultado);
+
+    elseif tg_table_name = 'estudio_realizado' then
+        create table if not exists estudio_borrado
+        (
+            id_paciente integer  not null,
+            id_estudio  smallint not null,
+            fecha       date     not null,
+            id_equipo   smallint not null,
+            id_empleado integer  not null,
+            resultado   varchar(50),
+            observacion varchar(100),
+            precio      numeric(10, 2)
+        );
+    elseif tg_table_name = 'tratamiento' then
+        create table if not exists tratamiento_borrado
+        (
+            id_paciente      integer     not null,
+            id_medicamento   integer     not null,
+            fecha_indicacion date        not null,
+            prescribe        integer     not null,
+            nombre           varchar(50) not null,
+            descripcion      varchar(100),
+            dosis            integer,
+            costo            numeric(10, 2)
+        );
+    else
+        raise exception 'Se llamó esta función sobre una tabla errada';
+    end if;
+end;
+$tr_audita_tablas_sistema$
+    language plpgsql;
+
+create or replace trigger tr_audita_tablas_sistema
+    after delete
+    on consulta
+    for each row
+execute procedure fn_audita_tablas_sistema();
+
+create or replace trigger tr_audita_tablas_sistema
+    after delete
+    on estudio_realizado
+    for each row
+execute procedure fn_audita_tablas_sistema();
+
+create or replace trigger tr_audita_tablas_sistema
+    after delete
+    on tratamiento
+    for each row
+execute procedure fn_audita_tablas_sistema();
