@@ -3,15 +3,15 @@
 -- Relacional e impleméntelo en postgres. Utilice arreglos para los campos multivaluados y cree tipos de datos
 -- donde corresponda.
 
-create type Cargo as enum ('Administrativo', 'Vendedor', 'Cajero', 'Gerente');
+create type cargo as enum ('Administrativo', 'Vendedor', 'Cajero', 'Gerente');
 
-create type Sector as enum ('Ventas', 'Compras', 'Gerencia', 'Depósito');
+create type sector as enum ('Ventas', 'Compras', 'Gerencia', 'Depósito');
 
-create type Categoria as enum ('Lácteos', 'Carnes', 'Bebidas', 'Cereales');
+create type categoria as enum ('Lácteos', 'Carnes', 'Bebidas', 'Cereales');
 
-create type Domicilio as
+create type domicilio as
 (
-    calle     varchar(50),
+    calle     varchar(100),
     numero    smallint,
     ciudad    varchar(100),
     provincia varchar(50)
@@ -47,20 +47,20 @@ create table cliente
 
 create table pedido
 (
-    id_pedido   int not null primary key,
+    id_pedido   bigint not null primary key,
     fecha       date,
-    total       int,
+    total       numeric(8, 2),
     id_empleado int,
     id_cliente  int,
-    constraint pedido_fk_empleado foreign key (id_empleado) references empleado (id_persona),
-    constraint pedido_fk_cliente foreign key (id_cliente) references cliente (id_persona)
+    constraint pedido_fk_empleado foreign key (id_empleado) references empleado (id_persona) on update cascade on delete no action,
+    constraint pedido_fk_cliente foreign key (id_cliente) references cliente (id_persona) on update cascade on delete no action
 );
 
-create table Producto
+create table producto
 (
     id_producto int not null primary key,
-    nombre      varchar(50),
-    descripcion varchar(50),
+    nombre      varchar(100),
+    descripcion varchar(150),
     precio      numeric(10, 2),
     proveedor   varchar(50)[],
     Categoria   categoria
@@ -71,13 +71,13 @@ create table tiene
     id_pedido   int,
     id_producto int,
     precio      numeric(10, 2),
-    constraint tiene_fk_pedido foreign key (id_pedido) references pedido (id_pedido),
-    constraint tiene_fk_producto foreign key (id_producto) references Producto (id_producto)
+    constraint tiene_fk_pedido foreign key (id_pedido) references pedido (id_pedido) on update cascade on delete cascade,
+    constraint tiene_fk_producto foreign key (id_producto) references Producto (id_producto) on update cascade on delete cascade
 );
 
 -- b) Inserte los siguientes registros en cada una de las tablas. Utilice transacciones por cada tabla.
 
-begin;
+begin transaction;
 
 insert into empleado
 values (1, 'VILCARROMERO, ERICK', 17130935, row ('AV SANTA ROSA', 1177, 'S.M.TUC', 'TUCUMÁN'),
@@ -144,9 +144,55 @@ savepoint carga_producto_yugurisimo_cereal;
 
 commit;
 
+-- c) Suponiendo que las tablas “pedido” y “tiene”, tienen muchos registros, usando herencia proponga e
+-- implemente particiones en ambas tablas.
+
+create table pedido2021
+(
+    check ( fecha >= '2021-01-01' and fecha <= '2021-12-31' ),
+    constraint pk_pedido primary key (id_pedido)
+) inherits (pedido);
+
+create table pedido2022
+(
+    check (fecha >= '2022-01-01' and fecha <= '2022-12-31'),
+    constraint pk_pedido primary key (id_pedido)
+) inherits (pedido);
+
+create table pedido2023
+(
+    check (fecha >= '2023-01-01' and fecha <= '2023-12-31'),
+    constraint pk_pedido primary key (id_pedido)
+) inherits (pedido);
+
+create table tiene_15000_pedido
+(
+    check (id_pedido <= 15000),
+    constraint pk_tiene primary key (id_pedido, id_producto),
+    constraint fk_pedido foreign key (id_pedido) references pedido (id_pedido) on update cascade on delete cascade,
+    constraint fk_producto foreign key (id_producto) references producto (id_producto) on update cascade on delete no action
+) inherits (tiene);
+
+create table tiene_30000_pedido
+(
+    check (id_pedido > 15000 and id_pedido <= 30000),
+    constraint pk_tiene primary key (id_pedido, id_producto),
+    constraint fk_pedido foreign key (id_pedido) references pedido (id_pedido) on update cascade on delete cascade,
+    constraint fk_producto foreign key (id_producto) references producto (id_producto) on update cascade on delete no action
+) inherits (tiene);
+
+create table tiene_45000_pedido
+(
+    check (id_pedido > 30000 and id_pedido <= 45000),
+    constraint pk_tiene primary key (id_pedido, id_producto),
+    constraint fk_pedido foreign key (id_pedido) references pedido (id_pedido) on update cascade on delete cascade,
+    constraint fk_producto foreign key (id_producto) references producto (id_producto) on update cascade on delete no action
+) inherits (tiene);
+
 -- Ejercicio 2: En la base de datos HOSPITAL, cree los tipos de datos que cumplan con los siguientes requerimientos:
---
+
 -- a) Id, nombre y apellido del paciente, sigla y nombre de la obra social de los pacientes.
+
 create type informacion_persona as
 (
     id          int,
@@ -157,6 +203,7 @@ create type informacion_persona as
 );
 
 -- b) Id, nombre, apellido, fecha de ingreso, cargo y especialidad de los empleados.
+
 create type Especialidad as enum ('Empleado', 'Gerente', 'Cliente');
 
 create type informacion_empleado as
@@ -184,6 +231,7 @@ create type informacion_medicamento as
 
 -- d) Nombre y apellido del paciente, nombre y apellido del médico, fecha de la consulta y nombre del
 -- consultorio donde se realizó la misma.
+
 create type informacion_paciente as
 (
     nombre           varchar(50),
@@ -196,6 +244,7 @@ create type informacion_paciente as
 
 -- e) Nombre y apellido del paciente, nombre y apellido del empleado, nombre, precio del estudio y fecha en
 -- el que se realizó el mismo.
+
 create type informacion_paciente as
 (
     nombre_completo_paciente varchar(100),
@@ -206,6 +255,7 @@ create type informacion_paciente as
 );
 
 -- f) Nombre y apellido del paciente, nombre y apellido del médico, costo y fecha de alta de la internación.
+
 create type informacion_medico as
 (
     nombre_completo_paciente varchar(100),
@@ -216,6 +266,7 @@ create type informacion_medico as
 
 -- g) Nombre y apellido del paciente, nombre y apellido del médico, nombre del medicamentos, dosis y costo
 -- del tratamiento.
+
 create type informacion_tratamiento as
 (
     nombre_completo_paciente varchar(100),
@@ -226,6 +277,7 @@ create type informacion_tratamiento as
 );
 
 -- h) Id, fecha y monto de la factura, nombre y apellido del paciente a quien le emitieron la factura.
+
 create type factura as
 (
     id                       int,
@@ -234,6 +286,7 @@ create type factura as
 );
 
 -- i) Nombre y apellido del paciente, fecha y monto de los pagos realizados.
+
 create type pago_realizado as
 (
     nombre_completo_paciente varchar(100),
@@ -242,6 +295,7 @@ create type pago_realizado as
 );
 
 -- j) Nombre y apellido del empleado, nombre y marca del equipo, fecha de ingreso y estado de los equipos
+
 create type estado_equipo as
 (
     nombre_completo_empleado varchar(100),
