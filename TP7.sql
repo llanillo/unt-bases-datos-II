@@ -688,7 +688,9 @@ $$
 select *
 from fn_arreglar_cama('21936475', '90', 'OK');
 
-select * from mantenimiento_cama mc where mc.id_cama = '90';
+select *
+from mantenimiento_cama mc
+where mc.id_cama = '90';
 
 -- b) Cuando se interna a un paciente se agregar un registro en la tabla internación solo con los
 -- campos obligatorios, recién cuando se da de alta se completan los otros 3 campos de la
