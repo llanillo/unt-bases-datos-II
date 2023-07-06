@@ -285,7 +285,8 @@ begin
         nombre           varchar(50),
         presentacion     varchar(50),
         precio           numeric(8, 2),
-        stock            integer
+        stock            integer,
+        tabla_trigger    varchar
     );
 
     -----------------------------  INICIO CONTROLES -----------------------------
@@ -299,15 +300,15 @@ begin
 
         for medicamento_modificado in select *
                                       from medicamento me
-                                      where me.id_laboratorio = (select l.id_laboratorio
+                                      where me.id_laboratorio in (select l.id_laboratorio
                                                                  from laboratorio l
-                                                                 where l.laboratorio = old.laboratorio)
+                                                                 where l.laboratorio = old.laboratorio limit 1)
             loop
                 insert into medi_modificado
                 values (medicamento_modificado.id_medicamento, medicamento_modificado.id_clasificacion,
                         medicamento_modificado.id_laboratorio, medicamento_modificado.nombre,
                         medicamento_modificado.presentacion, medicamento_modificado.precio,
-                        medicamento_modificado.stock);
+                        medicamento_modificado.stock, tg_table_name);
             end loop;
 
         update medicamento m
@@ -320,15 +321,15 @@ begin
 
         for medicamento_modificado in select *
                                       from medicamento me
-                                      where me.id_clasificacion = (select c.id_clasificacion
+                                      where me.id_clasificacion in (select c.id_clasificacion
                                                                    from clasificacion c
-                                                                   where c.clasificacion = old.clasificacion)
+                                                                   where c.clasificacion = old.clasificacion limit 1)
             loop
                 insert into medi_modificado
                 values (medicamento_modificado.id_medicamento, medicamento_modificado.id_clasificacion,
                         medicamento_modificado.id_laboratorio, medicamento_modificado.nombre,
                         medicamento_modificado.presentacion, medicamento_modificado.precio,
-                        medicamento_modificado.stock);
+                        medicamento_modificado.stock, tg_table_name);
             end loop;
 
 
