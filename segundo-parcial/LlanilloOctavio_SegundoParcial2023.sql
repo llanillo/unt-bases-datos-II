@@ -12,21 +12,11 @@ create or replace procedure sp_calcula_costo(p_id_paciente int, p_id_cama int, p
 as
 $$
 declare
-    internacion_buscada       internacion%rowtype;
-    costo_habitacion          numeric;
+    internacion_buscada       record;
     cantidad_dias_internacion int;
 begin
 
-    select i.*
-    from internacion i
-             inner join paciente pa using (id_paciente)
-             inner join persona p on pa.id_paciente = p.id_persona
-    where pa.id_paciente = p_id_paciente
-      and i.fecha_inicio = p_fecha_inicio
-      and i.fecha_alta = p_fecha_alta
-    into internacion_buscada;
-
-    select h.precio
+    select i.fecha_inicio, i.fecha_alta, h.precio
     from habitacion h
              inner join cama c using (id_habitacion)
              inner join internacion i using (id_cama)
@@ -35,14 +25,26 @@ begin
       and c.id_cama = p_id_cama
       and i.fecha_inicio = p_fecha_inicio
       and i.fecha_alta = p_fecha_alta
-    into costo_habitacion;
+    into internacion_buscada;
 
     cantidad_dias_internacion :=
             extract(day from age(date(internacion_buscada.fecha_inicio), date(internacion_buscada.fecha_alta)));
-    p_total := cantidad_dias_internacion * costo_habitacion;
+    p_total := cantidad_dias_internacion * internacion_buscada.precio;
 end;
 $$
     language plpgsql;
+
+select h.precio
+from habitacion h
+         inner join cama c using (id_habitacion)
+         inner join internacion i using (id_cama)
+         inner join paciente pa using (id_paciente)
+where id_paciente = 26909
+  and id_cama = 70
+  and fecha_inicio = '2019-01-31'
+  and fecha_alta = '2019-02-10';
+
+call sp_calcula_costo(26909, 70, '2019-01-31', '2019-02-10', null);
 
 -- b) Escriba el procedimiento almacenado sp_internacion; el mismo recibirá como parámetros el nombre y apellido
 -- de un paciente, id_cama y una fecha. Si en la tabla internación no existe un registro con el paciente, la cama
@@ -120,7 +122,18 @@ begin
           and p.apellido like p_apellido
         into id_paciente_buscado;
 
-        call sp_calcula_costo(id_paciente_buscado, p_id_cama, p_fecha, null, costo);
+        call sp_calcula_costo(id_paciente_buscado,
+                              p_id_cama, (select i.fecha_inicio
+                                          from persona p
+                                                   inner join paciente pa on p.id_persona = pa.id_paciente
+                                                   inner join internacion i using (id_paciente)
+                                                   inner join cama c using (id_cama)
+                                          where c.id_cama = p_id_cama
+                                            and p.nombre like p_nombre
+                                            and p.apellido like p_apellido
+                                            and i.fecha_alta is null)
+            ,
+                              p_fecha, costo_final);
 
         update internacion i
         set fecha_alta = p_fecha,
