@@ -23,6 +23,7 @@ begin
              inner join persona p on pa.id_paciente = p.id_persona
     where pa.id_paciente = p_id_paciente
       and i.fecha_inicio = p_fecha_inicio
+      and i.fecha_alta = p_fecha_alta
     into internacion_buscada;
 
     select h.precio
@@ -33,17 +34,15 @@ begin
     where pa.id_paciente = p_id_paciente
       and c.id_cama = p_id_cama
       and i.fecha_inicio = p_fecha_inicio
+      and i.fecha_alta = p_fecha_alta
     into costo_habitacion;
 
     cantidad_dias_internacion :=
             extract(day from age(date(internacion_buscada.fecha_inicio), date(internacion_buscada.fecha_alta)));
     p_total := cantidad_dias_internacion * costo_habitacion;
-
 end;
 $$
     language plpgsql;
-
-
 
 -- b) Escriba el procedimiento almacenado sp_internacion; el mismo recibirá como parámetros el nombre y apellido
 -- de un paciente, id_cama y una fecha. Si en la tabla internación no existe un registro con el paciente, la cama
@@ -55,6 +54,70 @@ $$
 -- fuera de servicio.
 -- Nota1: se aconseja usar CREATE PROCEDURE sp_internacion(text, text, integer, date) AS $$
 --     Nota2: se aconseja usar Variable = (SELECT sp_calcula_costo(arg1, arg2, arg3, arg4, NULL))
+
+create or replace procedure sp_internacion(p_nombre text, p_apellido text, p_id_cama int, p_fecha date)
+as
+$$
+declare
+    existe_paciente                  boolean;
+    existe_cama                      boolean;
+    existe_internacion               boolean;
+    informacion_paciente_internacion record;
+begin
+    -------------------------------------- INICIO CONTORLES --------------------------------------
+    if p_nombre is null or p_nombre = '' then
+        raise exception 'El nombre ingresado es inválido';
+    end if;
+
+    if p_apellido is null or p_apellido = '' then
+        raise exception 'El apellido ingresado es inválido';
+    end if;
+
+    if p_id_cama is null then
+        raise exception 'El id_cama ingresado es inválido';
+    end if;
+
+    if p_fecha is null then
+        raise exception 'La fecha ingresado es inválida';
+    end if;
+
+    select exists(select 1 from persona p where p.nombre like p_nombre and p.apellido like p_apellido)
+    into existe_paciente;
+
+    if not existe_paciente then
+        raise exception 'No existe la persona buscada';
+    end if;
+
+    select exists(select 1 from cama c where c.id_cama = p_id_cama) into existe_cama;
+
+    if not existe_cama then
+        raise exception 'No existe la cama buscada';
+    end if;
+    -------------------------------------- FIN CONTORLES --------------------------------------
+
+    -------------------------------------- INICIO PROCEDIMIENTO --------------------------------------
+    select exists(select 1
+                  from persona p
+                           inner join paciente pa on p.id_persona = pa.id_paciente
+                           inner join internacion i using (id_paciente)
+                           inner join cama c using (id_cama)
+                  where c.id_cama = p_id_cama
+                    and p.nombre like p_nombre
+                    and p.apellido like p_apellido
+                    and i.fecha_alta is null)
+    into existe_internacion;
+
+    if existe_internacion then
+
+    else
+       
+    end if;
+    -------------------------------------- FIN PROCEDIMIENTO --------------------------------------
+
+end;
+
+$$
+    language plpgsql;
 
 
 -- EJERCICIO N° 2: TRIGGERS
