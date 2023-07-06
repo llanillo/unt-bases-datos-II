@@ -251,6 +251,8 @@ create or replace trigger tr_alta_estudio_realizado
     for each row
 execute procedure fn_alta_estudio_realizado();
 
+-------------------------------------- PRUEBAS--------------------------------------
+
 -- b) Audite la tabla empleados solo cuando se modifique el campo sueldo por un sueldo mayor. Se debe guardar un
 -- registro en la tabla audita_empleado. Los datos que debe almacenar la nueva tabla serán: id, usuario, la fecha
 -- cuando se produjo la modificación, el id, nombre y apellido del empleado, el sueldo antes de la modificación y el
@@ -302,4 +304,11 @@ create or replace trigger tr_auditar_empleado
 execute procedure fn_auditar_empleado();
 
 -------------------------------------- PRUEBAS--------------------------------------
-update empleado e set sueldo = 1540000 where id_empleado = 853;
+begin;
+
+-- sueldo anterior: 1940000
+update empleado e set sueldo = 1940000 where id_empleado = 853;
+
+select * from audita_empleado;
+
+rollback;
