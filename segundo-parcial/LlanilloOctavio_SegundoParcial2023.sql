@@ -34,11 +34,13 @@ end;
 $$
     language plpgsql;
 
-select h.precio
+-- TODO BORRAR
+select p.*
 from habitacion h
          inner join cama c using (id_habitacion)
          inner join internacion i using (id_cama)
          inner join paciente pa using (id_paciente)
+         inner join persona p on pa.id_paciente = p.id_persona
 where id_paciente = 26909
   and id_cama = 70
   and fecha_inicio = '2019-01-31'
@@ -100,10 +102,11 @@ begin
         raise exception 'La cama seleccionada esta fuera de servicio';
     end if;
 
-    select * from cama;
     -------------------------------------- FIN CONTORLES --------------------------------------
 
     -------------------------------------- INICIO PROCEDIMIENTO --------------------------------------
+
+    ----------------- BUSCA INTERNACIÓN CON LOS PARÁMETROS -----------------
     select exists(select 1
                   from persona p
                            inner join paciente pa on p.id_persona = pa.id_paciente
@@ -114,26 +117,30 @@ begin
                     and p.apellido like p_apellido
                     and i.fecha_alta is null)
     into existe_internacion;
+    ----------------- BUSCA INTERNACIÓN CON LOS PARÁMETROS -----------------
+
+
+    ----------------- BUSCA PACIENTE CON LOS PARÁMETROS -----------------
+    select id_persona
+    from persona p
+    where p.nombre like p_nombre
+      and p.apellido like p_apellido
+    limit 1
+    into id_paciente_buscado;
+    ----------------- BUSCA PACIENTE CON LOS PARÁMETROS -----------------
 
     if existe_internacion then
-        select id_persona
-        from persona p
-        where p.nombre like p_nombre
-          and p.apellido like p_apellido
-        into id_paciente_buscado;
 
-        call sp_calcula_costo(id_paciente_buscado,
-                              p_id_cama, (select i.fecha_inicio
-                                          from persona p
-                                                   inner join paciente pa on p.id_persona = pa.id_paciente
-                                                   inner join internacion i using (id_paciente)
-                                                   inner join cama c using (id_cama)
-                                          where c.id_cama = p_id_cama
-                                            and p.nombre like p_nombre
-                                            and p.apellido like p_apellido
-                                            and i.fecha_alta is null)
-            ,
-                              p_fecha, costo_final);
+        costo_final := (select sp_calcula_costo(id_paciente_buscado, p_id_cama, (select i.fecha_inicio
+                                                                                 from persona p
+                                                                                          inner join paciente pa on p.id_persona = pa.id_paciente
+                                                                                          inner join internacion i using (id_paciente)
+                                                                                          inner join cama c using (id_cama)
+                                                                                 where c.id_cama = p_id_cama
+                                                                                   and p.nombre like p_nombre
+                                                                                   and p.apellido like p_apellido
+                                                                                   and i.fecha_alta is null),
+                                                p_fecha, costo_final));
 
         update internacion i
         set fecha_alta = p_fecha,
@@ -141,17 +148,37 @@ begin
             costo      = costo_final
         where i.id_paciente = id_paciente_buscado
           and i.id_cama = p_id_cama;
+
     else
+
         insert into internacion
-        values ((select id_persona from persona p where p.nombre like p_nombre and p.apellido limit 1), p_id_cama,
-                p_fecha, 0, null, null, null);
+        values (id_paciente_buscado, p_id_cama, p_fecha, 0, null, null, null);
 
     end if;
+
     -------------------------------------- FIN PROCEDIMIENTO --------------------------------------
 
 end;
 
 $$ language plpgsql;
+
+
+-------------------------------------- PRUEBAS--------------------------------------
+
+begin;
+
+-- PRUEBA CAMA FUERA DE SERVICIO
+call sp_internacion('MABEL ELISABETH', 'BUSTOS', 3, '2019-01-01');
+
+-- PRUEBA PERSONA INEXISTENTE
+call sp_internacion('ELISABETH', 'BUSTOS', 3, '2019-01-01');
+
+-- PRUEBA QUE DEBERÍA FUNCIONAR
+call sp_internacion('MABEL ELISABETH', 'BUSTOS', 1, '2019-01-01');
+
+rollback;
+
+-------------------------------------- PRUEBAS--------------------------------------
 
 -- EJERCICIO N° 2: TRIGGERS
 --
@@ -174,6 +201,7 @@ declare
     informacion_estudio  estudio%rowtype;
 begin
 
+    ----------------- CREA TABLA EN CASO DE NO EXISTIR -----------------
     create table if not exists estudios_x_empleados
     (
         id_empleado    int,
@@ -181,15 +209,15 @@ begin
         apellido       varchar,
         id_estudio     int,
         nombre_estudio varchar,
-        cantidad       int,
+        cantidad       int default 0,
         fecha          date
     );
 
+    ----------------- BUSCA ESTUDIO REALILZADO EN LA TABLA DE AUDITADO -----------------
     select exists(select 1
-                  from estudio_realizado er
+                  from estudios_x_empleados er
                   where er.id_empleado = new.id_empleado
-                    and er.id_estudio = new.id_estudio
-                    and er.id_paciente = new.id_paciente)
+                    and er.id_estudio = new.id_estudio)
     into existe_estudio;
 
     if existe_estudio then
@@ -199,14 +227,13 @@ begin
         where ee.id_empleado = new.id_empleado
           and ee.id_estudio = new.id_estudio;
     else
-        select p.*
-        from persona p
-                 inner join empleado e on p.id_persona = e.id_empleado
-        where e.id_empleado = new.id_empleado
-        into informacion_empleado;
+        ----------------- BUSCA LOS DATOS DE LA PERSONA QUE HACE EL ESTUDIO -----------------
+        select p.nombre, p.apellido from persona p where p.id_persona = new.id_empleado into informacion_empleado;
 
+        ----------------- BUSCA LOS DATOS DEL ESTUDIO -----------------
         select * from estudio e where e.id_estudio = new.id_estudio;
 
+        ----------------- REALIZA EL NUEVO INSERT -----------------
         insert into estudios_x_empleados
         values (new.id_empleado, informacion_empleado.nombre, informacion_empleado.apellido, new.id_estudio,
                 informacion_estudio.nombre, 0, new.fecha);
@@ -241,8 +268,8 @@ begin
 
     create table if not exists audita_empleado
     (
-        id                int,
-        usuario           varchar,
+        id                serial,
+        usuario           varchar(100),
         fecha             date,
         id_empleado       int,
         nombre_empleado   varchar,
@@ -257,8 +284,10 @@ begin
     select * from persona p where p.id_persona = new.id_empleado into informacion_empleado;
 
     insert into audita_empleado
-    values ((select max(id) + 1 from audita_empleado), user, current_date, new.id_empleado, informacion_empleado.nombre,
-            informacion_empleado.apellido, old.sueldo, new.sueldo, porcentaje_final);
+    values (default, user, current_date, new.id_empleado, informacion_empleado.nombre, informacion_empleado.apellido,
+            old.sueldo, new.sueldo, porcentaje_final);
+
+    return new;
 end;
 
 $tr_auditar_empleado$
@@ -272,3 +301,5 @@ create or replace trigger tr_auditar_empleado
     when ( new.sueldo > old.sueldo )
 execute procedure fn_auditar_empleado();
 
+-------------------------------------- PRUEBAS--------------------------------------
+update empleado e set sueldo = 1540000 where id_empleado = 853;
