@@ -222,8 +222,30 @@ create or replace function fn_auditar_empleado() returns trigger
 as
 $tr_auditar_empleado$
 declare
+    informacion_empleado persona%rowtype;
+    porcentaje_final     float;
 begin
 
+    create table if not exists audita_empleado
+    (
+        id                int,
+        usuario           varchar,
+        fecha             date,
+        id_empleado       int,
+        nombre_empleado   varchar,
+        apellido_empleado varchar,
+        sueldo_anterior   numeric,
+        sueldo_nuevo      numeric,
+        porcentaje        float
+    );
+
+    porcentaje_final = ((new.sueldo - old.sueldo) / old.sueldo) * 100;
+
+    select * from persona p where p.id_persona = new.id_empleado into informacion_empleado;
+
+    insert into audita_empleado
+    values ((select max(id) + 1 from audita_empleado), user, current_date, new.id_empleado, informacion_empleado.nombre,
+            informacion_empleado.apellido, old.sueldo, new.sueldo, porcentaje_final);
 end;
 
 $tr_auditar_empleado$
