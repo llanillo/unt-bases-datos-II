@@ -8,3 +8,6 @@ Consultas dinámicas
 Triggers
 Si es After se pone solo return
 Si es before hay que pensar si retorno el nuevo o el viejo
+
+INSERTAR ARRAYS
+insert into persona values (2,‘luis rios’, array[‘2356321’,’7721547’]);
