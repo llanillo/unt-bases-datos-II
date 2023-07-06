@@ -276,6 +276,7 @@ $tr_eliminado_laboratorio_clasificacion$
 declare
     medicamento_modificado medicamento%rowtype;
 begin
+    ----------------------------- CREA TABLA EN CASO DE QUE NO EXISTA -----------------------------
     create table if not exists medi_modificado
     (
         id_medicamento   integer,
@@ -287,11 +288,13 @@ begin
         stock            integer
     );
 
+    -----------------------------  INICIO CONTROLES -----------------------------
     if tg_table_name not in ('laboratorio', 'clasificacion') then
         raise exception 'Trigger ejecutado en tabla inválida'
     end if;
+    -----------------------------  FIN CONTROLES -----------------------------
 
-
+    -----------------------------  MODIFICACIONES -----------------------------
     if tg_table_name = 'laboratorio' then
 
         for medicamento_modificado in select *
