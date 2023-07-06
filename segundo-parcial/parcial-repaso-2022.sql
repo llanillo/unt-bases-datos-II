@@ -78,7 +78,17 @@ $$
 -- El listado debe tener el id, nombre, presentación y precio del medicamento, además de id
 -- y nombre del laboratorio o clasificación, según corresponda.
 
-create or replace function fn_listar_clasificaciones_laboratorio(p_nombre_tabla varchar, p_nombre_campo varchar) returns setof record
+create type lista_clasificacion_laboratorio as
+(
+    id_medicamento           integer,
+    nombre_medicamento       varchar,
+    presentacion_medicamento varchar,
+    precio_medicamento       numeric,
+    id_tabla                 smallint,
+    valor_tabla              varchar
+);
+
+create or replace function fn_listar_clasificaciones_laboratorio(p_nombre_tabla varchar, p_nombre_campo varchar) returns setof lista_clasificacion_laboratorio
 as
 $$
 begin
@@ -86,7 +96,7 @@ begin
         raise exception 'Se ingresó un nombre de campo inválido';
     end if;
 
-    if p_nombre_tabla like 'clasificaciones' then
+    if p_nombre_tabla like 'clasificacion' then
         return query select m.id_medicamento, m.nombre, m.presentacion, m.precio, c.id_clasificacion, c.clasificacion
                      from clasificacion c
                               inner join medicamento m using (id_clasificacion)
@@ -101,6 +111,12 @@ begin
     end if;
 end;
 $$ language plpgsql;
+
+select *
+from clasificacion;
+
+select *
+from fn_listar_clasificaciones_laboratorio('clasificacion', 'ANALGESICO RELAJANTE MUSCULAR');
 
 -- c) Escriba una función que reciba como parámetros el nombre y presentación de un medicamento y un
 -- porcentaje de modificación de precio. Si el porcentaje ingresado es positivo, debe aumentar
