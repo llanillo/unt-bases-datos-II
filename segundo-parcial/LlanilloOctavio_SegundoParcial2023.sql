@@ -197,7 +197,7 @@ as
 $tr_alta_estudio_realizado$
 declare
     existe_estudio       boolean;
-    informacion_empleado persona%rowtype;
+    informacion_empleado record;
     informacion_estudio  estudio%rowtype;
 begin
 
@@ -231,7 +231,7 @@ begin
         select p.nombre, p.apellido from persona p where p.id_persona = new.id_empleado into informacion_empleado;
 
         ----------------- BUSCA LOS DATOS DEL ESTUDIO -----------------
-        select * from estudio e where e.id_estudio = new.id_estudio;
+        select * from estudio e where e.id_estudio = new.id_estudio into informacion_estudio;
 
         ----------------- REALIZA EL NUEVO INSERT -----------------
         insert into estudios_x_empleados
@@ -252,6 +252,14 @@ create or replace trigger tr_alta_estudio_realizado
 execute procedure fn_alta_estudio_realizado();
 
 -------------------------------------- PRUEBAS--------------------------------------
+begin;
+
+insert into estudio_realizado
+values (1, 2, current_date, 2, 5, 'RESULTADO', 'OBSERVACIÓN', 12344.5);
+
+select * from estudios_x_empleados;
+
+rollback;
 
 -- b) Audite la tabla empleados solo cuando se modifique el campo sueldo por un sueldo mayor. Se debe guardar un
 -- registro en la tabla audita_empleado. Los datos que debe almacenar la nueva tabla serán: id, usuario, la fecha
@@ -307,8 +315,11 @@ execute procedure fn_auditar_empleado();
 begin;
 
 -- sueldo anterior: 1940000
-update empleado e set sueldo = 1940000 where id_empleado = 853;
+update empleado e
+set sueldo = 1940000
+where id_empleado = 853;
 
-select * from audita_empleado;
+select *
+from audita_empleado;
 
 rollback;
