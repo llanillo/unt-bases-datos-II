@@ -59,10 +59,11 @@ create or replace procedure sp_internacion(p_nombre text, p_apellido text, p_id_
 as
 $$
 declare
-    existe_paciente                  boolean;
-    existe_cama                      boolean;
-    existe_internacion               boolean;
-    informacion_paciente_internacion record;
+    existe_paciente     boolean;
+    existe_cama         boolean;
+    existe_internacion  boolean;
+    costo_final         numeric;
+    id_paciente_buscado int;
 begin
     -------------------------------------- INICIO CONTORLES --------------------------------------
     if p_nombre is null or p_nombre = '' then
@@ -89,10 +90,15 @@ begin
     end if;
 
     select exists(select 1 from cama c where c.id_cama = p_id_cama) into existe_cama;
-
     if not existe_cama then
         raise exception 'No existe la cama buscada';
     end if;
+
+    if (select c.estado from cama c where c.id_cama = p_id_cama) in ('FUERA DE SERVICIO', 'EN REPARACION') then
+        raise exception 'La cama seleccionada esta fuera de servicio';
+    end if;
+
+    select * from cama;
     -------------------------------------- FIN CONTORLES --------------------------------------
 
     -------------------------------------- INICIO PROCEDIMIENTO --------------------------------------
@@ -108,17 +114,31 @@ begin
     into existe_internacion;
 
     if existe_internacion then
+        select id_persona
+        from persona p
+        where p.nombre like p_nombre
+          and p.apellido like p_apellido
+        into id_paciente_buscado;
 
+        call sp_calcula_costo(id_paciente_buscado, p_id_cama, p_fecha, null, costo);
+
+        update internacion i
+        set fecha_alta = p_fecha,
+            hora       = current_time,
+            costo      = costo_final
+        where i.id_paciente = id_paciente_buscado
+          and i.id_cama = p_id_cama;
     else
-       
+        insert into internacion
+        values ((select id_persona from persona p where p.nombre like p_nombre and p.apellido limit 1), p_id_cama,
+                p_fecha, 0, null, null, null);
+
     end if;
     -------------------------------------- FIN PROCEDIMIENTO --------------------------------------
 
 end;
 
-$$
-    language plpgsql;
-
+$$ language plpgsql;
 
 -- EJERCICIO N° 2: TRIGGERS
 --
@@ -132,6 +152,30 @@ $$
 -- fecha por la del último estudio realizado, si no coincide alguno de los id, deberá insertar un nuevo registro con los
 -- nuevos datos.
 
+create or replace function fn_alta_estudio_realizado() returns trigger
+as
+$tr_alta_estudio_realizado$
+declare
+begin
+
+    create table if not exists estudios_x_empleados
+    (
+        id_empleado    int,
+        nombre         varchar,
+        apellido       varchar,
+        id_estudio     int,
+        nombre_estudio varchar
+    );
+end;
+
+$tr_alta_estudio_realizado$
+    language plpgsql;
+
+create or replace trigger tr_alta_estudio_realizado
+    before insert
+    on estudio_realizado
+    for each row
+execute procedure fn_alta_estudio_realizado();
 
 -- b) Audite la tabla empleados solo cuando se modifique el campo sueldo por un sueldo mayor. Se debe guardar un
 -- registro en la tabla audita_empleado. Los datos que debe almacenar la nueva tabla serán: id, usuario, la fecha
