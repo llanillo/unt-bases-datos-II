@@ -81,6 +81,8 @@ begin
     end if;
 
     update medicamento m set stock = stock + new.cantidad where m.id_medicamento = new.id_medicamento;
+
+    return new;
 end;
 
 $tr_alta_compra$
@@ -110,14 +112,19 @@ begin
         raise exception 'No existe la factura seleccionada en el pago';
     end if;
 
-    nuevo_saldo := abs((select monto from factura f where f.id_factura = new.id_factura) -
-                       (select sum(monto) from pago p where p.id_factura = new.id_factura));
-
-    if nuevo_saldo <= 0 then
-        update factura f set saldo = 0, pagada = 'S' where f.id_factura = new.id_factura;
+    if new.monto > (select f.saldo from factura f where f.id_factura = new.id_factura) then
+        raise exception 'No se puede pagar más de lo debido';
     else
-        update factura f set saldo = nuevo_saldo, pagada = 'N' where f.id_factura = new.id_factura;
+        nuevo_saldo := (select monto from factura f where f.id_factura = new.id_factura) -
+                       (select sum(monto) from pago p where p.id_factura = new.id_factura);
+
+        if nuevo_saldo <= 0 then
+            update factura f set saldo = 0, pagada = 'S' where f.id_factura = new.id_factura;
+        else
+            update factura f set saldo = nuevo_saldo, pagada = 'N' where f.id_factura = new.id_factura;
+        end if;
     end if;
+
 
     return new;
 end;
