@@ -210,6 +210,7 @@ begin
              inner join internacion i using (id_paciente)
     where i.id_paciente = new.id_paciente
       and i.id_cama = new.id_cama
+      and i.fecha_inicio = new.fecha_inicio
     into paciente_internado;
 
     select h.precio
@@ -218,13 +219,22 @@ begin
              inner join internacion i using (id_cama)
     where i.id_cama = new.id_cama
       and i.id_paciente = new.id_paciente
+      and i.fecha_inicio = new.fecha_inicio
     into costo_habitacion;
 
     cantidad_dias_internacion := extract(day from age(date(new.fecha_inicio), date(new.fecha_alta)));
     costo_final := cantidad_dias_internacion * costo_habitacion;
 
+    update internacion i
+    set costo = costo_final
+    where i.id_cama = new.id_cama
+      and i.id_paciente = new.id_paciente
+      and i.fecha_inicio = new.fecha_inicio;
+
     raise notice 'Id=%, Nombre=%, Cantidad días internado=%, Costo Internación=%',
         paciente_internado.id_persona, paciente_internado.nombre, cantidad_dias_internacion, costo_final;
+
+    return new;
 end;
 $tr_costo_internacion$
     language plpgsql;
@@ -300,6 +310,8 @@ begin
     else
         raise exception 'Tabla inválida';
     end if;
+
+    return old;
 end;
 $tr_eliminar_cargo_especialidad$
     language plpgsql;
