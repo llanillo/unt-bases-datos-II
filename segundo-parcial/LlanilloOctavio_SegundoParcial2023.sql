@@ -30,23 +30,21 @@ begin
     cantidad_dias_internacion :=
             extract(day from age(date(internacion_buscada.fecha_inicio), date(internacion_buscada.fecha_alta)));
     p_total := cantidad_dias_internacion * internacion_buscada.precio;
+
+exception
+    when others then
+        raise exception 'Ocurrió un problema al ejecutar el procedimiento %', SQLERRM;
 end;
 $$
     language plpgsql;
 
--- TODO BORRAR
-select p.*
-from habitacion h
-         inner join cama c using (id_habitacion)
-         inner join internacion i using (id_cama)
-         inner join paciente pa using (id_paciente)
-         inner join persona p on pa.id_paciente = p.id_persona
-where id_paciente = 26909
-  and id_cama = 70
-  and fecha_inicio = '2019-01-31'
-  and fecha_alta = '2019-02-10';
+-------------------------------------- PRUEBAS--------------------------------------
+
+begin;
 
 call sp_calcula_costo(26909, 70, '2019-01-31', '2019-02-10', null);
+
+rollback;
 
 -- b) Escriba el procedimiento almacenado sp_internacion; el mismo recibirá como parámetros el nombre y apellido
 -- de un paciente, id_cama y una fecha. Si en la tabla internación no existe un registro con el paciente, la cama
@@ -94,6 +92,7 @@ begin
     end if;
 
     select exists(select 1 from cama c where c.id_cama = p_id_cama) into existe_cama;
+
     if not existe_cama then
         raise exception 'No existe la cama buscada';
     end if;
@@ -117,8 +116,6 @@ begin
                     and p.apellido like p_apellido
                     and i.fecha_alta is null)
     into existe_internacion;
-    ----------------- BUSCA INTERNACIÓN CON LOS PARÁMETROS -----------------
-
 
     ----------------- BUSCA PACIENTE CON LOS PARÁMETROS -----------------
     select id_persona
@@ -127,27 +124,28 @@ begin
       and p.apellido like p_apellido
     limit 1
     into id_paciente_buscado;
-    ----------------- BUSCA PACIENTE CON LOS PARÁMETROS -----------------
 
     if existe_internacion then
 
-        costo_final := (select sp_calcula_costo(id_paciente_buscado, p_id_cama, (select i.fecha_inicio
-                                                                                 from persona p
-                                                                                          inner join paciente pa on p.id_persona = pa.id_paciente
-                                                                                          inner join internacion i using (id_paciente)
-                                                                                          inner join cama c using (id_cama)
-                                                                                 where c.id_cama = p_id_cama
-                                                                                   and p.nombre like p_nombre
-                                                                                   and p.apellido like p_apellido
-                                                                                   and i.fecha_alta is null),
-                                                p_fecha, costo_final));
-
+        ---- COMENTADO
+--         costo_final := (select sp_calcula_costo(id_paciente_buscado, p_id_cama, (select i.fecha_inicio
+--                                                                                  from persona p
+--                                                                                           inner join paciente pa on p.id_persona = pa.id_paciente
+--                                                                                           inner join internacion i using (id_paciente)
+--                                                                                           inner join cama c using (id_cama)
+--                                                                                  where c.id_cama = p_id_cama
+--                                                                                    and p.nombre like p_nombre
+--                                                                                    and p.apellido like p_apellido
+--                                                                                    and i.fecha_alta is null),
+--                                                 p_fecha, costo_final));
+--
         update internacion i
         set fecha_alta = p_fecha,
             hora       = current_time,
-            costo      = costo_final
+            costo      = 234
         where i.id_paciente = id_paciente_buscado
-          and i.id_cama = p_id_cama;
+          and i.id_cama = p_id_cama
+          and i.fecha_alta is null;
 
     else
 
@@ -156,10 +154,11 @@ begin
 
     end if;
 
-    -------------------------------------- FIN PROCEDIMIENTO --------------------------------------
+exception
+    when others then
+        raise exception 'Ocurrió un problema al ejecutar el procedimiento %', SQLERRM;
 
 end;
-
 $$ language plpgsql;
 
 
@@ -205,11 +204,11 @@ begin
     create table if not exists estudios_x_empleados
     (
         id_empleado    int,
-        nombre         varchar,
-        apellido       varchar,
+        nombre         varchar(150),
+        apellido       varchar(150),
         id_estudio     int,
-        nombre_estudio varchar,
-        cantidad       int default 0,
+        nombre_estudio varchar(150),
+        cantidad       int default 1,
         fecha          date
     );
 
@@ -236,7 +235,7 @@ begin
         ----------------- REALIZA EL NUEVO INSERT -----------------
         insert into estudios_x_empleados
         values (new.id_empleado, informacion_empleado.nombre, informacion_empleado.apellido, new.id_estudio,
-                informacion_estudio.nombre, 0, new.fecha);
+                informacion_estudio.nombre, 1, new.fecha);
     end if;
 
     return new;
@@ -255,9 +254,16 @@ execute procedure fn_alta_estudio_realizado();
 begin;
 
 insert into estudio_realizado
-values (1, 2, current_date, 2, 5, 'RESULTADO', 'OBSERVACIÓN', 12344.5);
+values (1, 1, current_date, 1, 1, 'RESULTADO', 'OBSERVACIÓN', 12344.5);
 
-select * from estudios_x_empleados;
+select *
+from estudios_x_empleados;
+
+insert into estudio_realizado
+values (3, 1, current_date, 1, 1, 'RESULTADO', 'OBSERVACIÓN', 12344.5);
+
+select *
+from estudios_x_empleados;
 
 rollback;
 
@@ -282,10 +288,10 @@ begin
         usuario           varchar(100),
         fecha             date,
         id_empleado       int,
-        nombre_empleado   varchar,
-        apellido_empleado varchar,
-        sueldo_anterior   numeric,
-        sueldo_nuevo      numeric,
+        nombre_empleado   varchar(150),
+        apellido_empleado varchar(150),
+        sueldo_anterior   numeric(9, 2),
+        sueldo_nuevo      numeric(9, 2),
         porcentaje        float
     );
 
