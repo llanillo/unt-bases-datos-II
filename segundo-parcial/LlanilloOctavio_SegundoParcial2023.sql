@@ -156,6 +156,9 @@ create or replace function fn_alta_estudio_realizado() returns trigger
 as
 $tr_alta_estudio_realizado$
 declare
+    existe_estudio       boolean;
+    informacion_empleado persona%rowtype;
+    informacion_estudio  estudio%rowtype;
 begin
 
     create table if not exists estudios_x_empleados
@@ -164,8 +167,39 @@ begin
         nombre         varchar,
         apellido       varchar,
         id_estudio     int,
-        nombre_estudio varchar
+        nombre_estudio varchar,
+        cantidad       int,
+        fecha          date
     );
+
+    select exists(select 1
+                  from estudio_realizado er
+                  where er.id_empleado = new.id_empleado
+                    and er.id_estudio = new.id_estudio
+                    and er.id_paciente = new.id_paciente)
+    into existe_estudio;
+
+    if existe_estudio then
+        update estudios_x_empleados ee
+        set cantidad = cantidad + 1,
+            fecha    = new.fecha
+        where ee.id_empleado = new.id_empleado
+          and ee.id_estudio = new.id_estudio;
+    else
+        select p.*
+        from persona p
+                 inner join empleado e on p.id_persona = e.id_empleado
+        where e.id_empleado = new.id_empleado
+        into informacion_empleado;
+
+        select * from estudio e where e.id_estudio = new.id_estudio;
+
+        insert into estudios_x_empleados
+        values (new.id_empleado, informacion_empleado.nombre, informacion_empleado.apellido, new.id_estudio,
+                informacion_estudio.nombre, 0, new.fecha);
+    end if;
+
+    return new;
 end;
 
 $tr_alta_estudio_realizado$
@@ -184,4 +218,22 @@ execute procedure fn_alta_estudio_realizado();
 -- aumento.
 --  Nota2: porcentaje = ((sueldo_aumentado - sueldo_sin_aumento) / sueldo_sin_aumento) * 100
 
+create or replace function fn_auditar_empleado() returns trigger
+as
+$tr_auditar_empleado$
+declare
+begin
+
+end;
+
+$tr_auditar_empleado$
+    language plpgsql;
+
+create or replace trigger tr_auditar_empleado
+    before update
+        of sueldo
+    on empleado
+    for each row
+    when ( new.sueldo > old.sueldo )
+execute procedure fn_auditar_empleado();
 
