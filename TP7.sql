@@ -784,7 +784,7 @@ $$
 select *
 from fn_arreglar_cama('21936475', '90', 'OK');
 
-from mantenimiento_cama mc
+select * from mantenimiento_cama mc
 where mc.id_cama = '90';
 
 -- b) Cuando se interna a un paciente se agregar un registro en la tabla internación solo con los
