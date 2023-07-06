@@ -7,7 +7,7 @@
 -- empleado a modificar exista, de lo contrario debe enviar un mensaje de error. Agregue más
 -- controles de ser necesario.
 
-create or replace function fn_modificar_fecha_empleado(varchar(8), varchar(8), date) returns void
+create or replace function fn_modificar_fecha_empleado(varchar, varchar, date) returns void
 as
 $$
 declare
@@ -92,6 +92,10 @@ begin
         raise exception 'El primer argumento es inválido';
     end if;
 
+    if nombre_buscado is null or nombre_buscado = '' then
+        raise exception 'El segundo argumento es inválido';
+    end if;
+
     if tipo not in ('A', 'D') then
         raise exception 'El tercer argumento es inválido';
     end if;
@@ -116,7 +120,7 @@ begin
         update medicamento
         set precio = precio * porcentaje_final
         from laboratorio l
-        where medicamento.id_laboratorio =
+        where id_laboratorio =
               (select id_laboratorio from laboratorio l where l.laboratorio like nombre_buscado limit 1);
 
     elseif entidad = 'P' then
@@ -129,11 +133,11 @@ begin
         update medicamento
         set precio = precio * porcentaje_final
         from proveedor p
-        where medicamento.id_medicamento in (select distinct id_medicamento
-                                             from compra c
-                                             where c.id_proveedor in (select id_proveedor
-                                                                      from proveedor p
-                                                                      where p.proveedor like nombre_buscado));
+        where id_medicamento in (select distinct id_medicamento
+                                 from compra c
+                                 where c.id_proveedor in (select id_proveedor
+                                                          from proveedor p
+                                                          where p.proveedor like nombre_buscado));
 
     elseif entidad = 'M' then
         select exists(select 1 from medicamento m where m.nombre like nombre_buscado) into existe;
@@ -157,32 +161,42 @@ $$ language plpgsql;
 -- modificación, debe ser el nuevo nombre del cargo que debe reemplazar al existente (el del
 -- primer parámetro).
 
-create or replace function fn_abm_cargos(nombre varchar(50), tipo varchar(50)) returns void
+create or replace function fn_abm_cargos(nombre varchar, tipo varchar) returns void
 as
 $$
 declare
-    existe boolean;
+    existe_cargo boolean;
 begin
-    select exists(select 1 from cargo c where c.cargo like nombre) into existe;
+    if nombre is null or nombre = '' then
+        raise exception 'El nombre es inválido';
+    end if;
+
+    if tipo is null or tipo = '' then
+        raise exception 'El tipo es inválido';
+    end if;
+
+    select exists(select 1 from cargo c where c.cargo like nombre) into existe_cargo;
 
     if tipo like 'insert' then
-        if existe then
+        if existe_cargo then
             raise exception 'Se trató de insertar un cargo ya existente';
         end if;
 
         insert into cargo values ((select max(id_cargo) + 1 from cargo), nombre);
     elseif tipo like 'delete' then
-        if not existe then
+        if not existe_cargo then
             raise exception 'Se trató de eliminar un cargo que no existe';
         end if;
 
         delete from cargo c where c.cargo like nombre;
-    else
-        if not existe then
+    elseif tipo like 'update' then
+        if not existe_cargo then
             raise exception 'Se trató de modificar un cargo que no existe';
         end if;
 
         update cargo set cargo = tipo where cargo.cargo like nombre;
+    else
+        raise exception 'Se ingresó una opción de ABM inválida';
 
     end if;
 
@@ -194,10 +208,18 @@ $$
 -- y especialidad. Debe recibir dos parámetros, el primero el nombre de la tabla en la cual se
 -- quiere agregar la información y el segundo el valor del campo a agregar.
 
-create or replace function fn_alta_estudio_patologia_clasificacion_especialidad(tabla varchar(20), valor varchar(75)) returns void
+create or replace function fn_alta_estudio_patologia_clasificacion_especialidad(tabla varchar, valor varchar) returns void
 as
 $$
 begin
+
+    if tabla is null or tabla = '' then
+        raise exception 'Se ingresó un nombre de tabla inválido';
+    end if;
+
+    if valor is null or valor = '' then
+        raise exception 'Se ingresó un valor de tabla inválido';
+    end if;
 
     if tabla like 'tipo_estudio' then
         insert into tipo_estudio values ((select max(id_tipo) + 1 from tipo_estudio), valor);
@@ -208,7 +230,6 @@ begin
     else
         raise exception 'Se recibió un nombre de tabla inválido';
     end if;
-
 end;
 $$
     language plpgsql;
@@ -225,23 +246,27 @@ drop type if exists tipo_obra_social_paciente;
 create type tipo_obra_social_paciente as
 (
     id_paciente        int,
-    nombre_paciente    varchar(100),
-    apellido_paciente  varchar(100),
-    nombre_obra_social varchar(100),
-    sigla_obra_social  varchar(15)
+    nombre_paciente    varchar,
+    apellido_paciente  varchar,
+    nombre_obra_social varchar,
+    sigla_obra_social  varchar
 );
 
-create or replace function fn_listado_obra_social(obra_social_nombre varchar(20)) returns setof tipo_obra_social_paciente
+create or replace function fn_listado_obra_social(obra_social_nombre varchar) returns setof tipo_obra_social_paciente
 as
 $$
 declare
-    fila_buscada tipo_obra_social_paciente;
-    existe       boolean;
+    fila_buscada       tipo_obra_social_paciente;
+    existe_obra_social boolean;
 begin
 
-    select exists(select 1 from obra_social ob where ob.nombre like obra_social_nombre) into existe;
+    if obra_social_nombre is null or obra_social_nombre = '' then
+        raise exception 'El nombre de la obra social es inválido';
+    end if;
 
-    if not existe then
+    select exists(select 1 from obra_social ob where ob.nombre like obra_social_nombre) into existe_obra_social;
+
+    if not existe_obra_social then
         raise exception 'No existe la obra social recibida';
     end if;
 
@@ -258,8 +283,6 @@ end;
 $$
     language plpgsql;
 
-select *
-from obra_social;
 select *
 from fn_listado_obra_social('OBRA SOCIAL PARA LA ACTIVIDAD DOCENTE');
 
@@ -283,25 +306,25 @@ create or replace function fn_listado_proveedor_medicamento_laboratorio(nombre_p
 as
 $$
 declare
-    fila_buscada tipo_medicamento_laboratorio_proveedor;
-    existe       boolean;
+    existe boolean;
 begin
+    if nombre_proveedor is null or nombre_proveedor = '' then
+        raise exception 'El nombre del proveedor es inválido';
+    end if;
+
     select exists(select 1 from proveedor p where p.proveedor like nombre_proveedor) into existe;
 
     if not existe then
         raise exception 'No existe el proveedor reibido';
     end if;
 
-    for fila_buscada in select m.id_medicamento, m.nombre, c.clasificacion, l.laboratorio, p.proveedor, m.precio
-                        from medicamento m
-                                 inner join clasificacion c using (id_clasificacion)
-                                 inner join laboratorio l using (id_laboratorio)
-                                 inner join compra co using (id_medicamento)
-                                 inner join proveedor p using (id_proveedor)
-                        where p.proveedor like nombre_proveedor
-        loop
-            return next fila_buscada;
-        end loop;
+    return query select m.id_medicamento, m.nombre, c.clasificacion, l.laboratorio, p.proveedor, m.precio
+                 from medicamento m
+                          inner join clasificacion c using (id_clasificacion)
+                          inner join laboratorio l using (id_laboratorio)
+                          inner join compra co using (id_medicamento)
+                          inner join proveedor p using (id_proveedor)
+                 where p.proveedor like nombre_proveedor;
     return;
 end;
 $$
@@ -330,26 +353,24 @@ create or replace function fn_listado_paciente_medico_consultorio(fecha_buscada 
 as
 $$
 declare
-    fila_buscada tipo_paciente_medico_consultorio;
 begin
-    for fila_buscada in select pa.nombre, pa.apellido, me.nombre, me.apellido, co.nombre
-                        from consulta c
-                                 inner join consultorio co using (id_consultorio)
-                                 inner join paciente p using (id_paciente)
-                                 inner join persona pa on p.id_paciente = pa.id_persona
-                                 inner join empleado e using (id_empleado)
-                                 inner join persona me on me.id_persona = e.id_empleado
-                        where c.fecha = fecha_buscada
-        loop
-            return next fila_buscada;
-        end loop;
-    return;
+
+    if fecha_buscada > current_date then
+        raise exception 'Se ingresó una fecha inválida';
+    end if;
+
+    return query select pa.nombre, pa.apellido, me.nombre, me.apellido, co.nombre
+                 from consulta c
+                          inner join consultorio co using (id_consultorio)
+                          inner join paciente p using (id_paciente)
+                          inner join persona pa on p.id_paciente = pa.id_persona
+                          inner join empleado e using (id_empleado)
+                          inner join persona me on me.id_persona = e.id_empleado
+                 where c.fecha = fecha_buscada;
 end;
 $$
     language plpgsql;
 
-select *
-from consulta;
 select *
 from fn_listado_paciente_medico_consultorio('2019-01-01');
 
@@ -369,13 +390,16 @@ create type tipo_paciente_medico_internacion as
     costo             numeric(10, 2)
 );
 
-create or replace function fn_listado_internaciones_paciente_medico(dni_buscado varchar(8)) returns setof tipo_paciente_medico_internacion
+create or replace function fn_listado_internaciones_paciente_medico(dni_buscado varchar) returns setof tipo_paciente_medico_internacion
 as
 $$
 declare
-    fila_buscada tipo_paciente_medico_internacion;
-    existe       boolean;
+    existe boolean;
 begin
+
+    if dni_buscado is null or dni_buscado = '' then
+        raise exception 'Se ingresó un DNI inválido';
+    end if;
 
     select exists(select 1 from persona p where p.dni like dni_buscado) into existe;
 
@@ -383,24 +407,17 @@ begin
         raise exception 'No existe un paciente con el DNI recibido';
     end if;
 
-    for fila_buscada in select pa.nombre, pa.apellido, me.nombre, me.apellido, i.fecha_alta, i.costo
-                        from internacion i
-                                 inner join paciente p using (id_paciente)
-                                 inner join persona pa on p.id_paciente = pa.id_persona
-                                 inner join empleado e on i.ordena_internacion = e.id_empleado
-                                 inner join persona me on e.id_empleado = me.id_persona
-                        where pa.dni like dni_buscado
-        loop
-            return next fila_buscada;
-        end loop;
-    return;
+    return query select pa.nombre, pa.apellido, me.nombre, me.apellido, i.fecha_alta, i.costo
+                 from internacion i
+                          inner join paciente p using (id_paciente)
+                          inner join persona pa on p.id_paciente = pa.id_persona
+                          inner join empleado e on i.ordena_internacion = e.id_empleado
+                          inner join persona me on e.id_empleado = me.id_persona
+                 where pa.dni like dni_buscado;
 end;
 $$
     language plpgsql;
 
-select dni
-from persona p
-         inner join paciente pa on p.id_persona = pa.id_paciente;
 select *
 from fn_listado_internaciones_paciente_medico('10101457');
 
@@ -417,28 +434,27 @@ create type tipo_medicamento_laboratorio_clasificacion as
     clasificacion      varchar(75)
 );
 
-create or replace function fn_listado_medicamento_laboratorio_clasificacion(laboratorio_buscado varchar(50)) returns setof tipo_medicamento_laboratorio_clasificacion
+create or replace function fn_listado_medicamento_laboratorio_clasificacion(laboratorio_buscado varchar) returns setof tipo_medicamento_laboratorio_clasificacion
 as
 $$
 declare
-    fila_buscada tipo_medicamento_laboratorio_clasificacion;
-    existe       boolean;
+    existe_laboratorio boolean;
 begin
-    select exists(select 1 from laboratorio l where l.laboratorio like laboratorio_buscado) into existe;
+    if laboratorio_buscado is null or laboratorio_buscado = '' then
+        raise exception 'Se ingresó un laboratorio inválido';
+    end if;
 
-    if not existe then
+    select exists(select 1 from laboratorio l where l.laboratorio like laboratorio_buscado) into existe_laboratorio;
+
+    if not existe_laboratorio then
         raise exception 'No existe el laboratorio recibido';
     end if;
 
-    for fila_buscada in select m.id_medicamento, m.nombre, m.stock, c.clasificacion
-                        from medicamento m
-                                 inner join clasificacion c using (id_clasificacion)
-                                 inner join laboratorio l using (id_laboratorio)
-                        where l.laboratorio like laboratorio_buscado
-        loop
-            return next fila_buscada;
-        end loop;
-    return;
+    return query select m.id_medicamento, m.nombre, m.stock, c.clasificacion
+                 from medicamento m
+                          inner join clasificacion c using (id_clasificacion)
+                          inner join laboratorio l using (id_laboratorio)
+                 where l.laboratorio like laboratorio_buscado;
 end;
 $$
     language plpgsql;
@@ -462,32 +478,31 @@ create type tipo_paciente_facturas as
     monto             numeric(10, 2)
 );
 
-create or replace function fn_paciente_facturas(dni_buscado varchar(8)) returns setof tipo_paciente_facturas
+create or replace function fn_paciente_facturas(dni_buscado varchar) returns setof tipo_paciente_facturas
 as
 $$
 declare
-    fila_buscada tipo_paciente_facturas;
-    existe       boolean;
+    existe_paciente boolean;
 begin
+    if dni_buscado is null or dni_buscado = '' then
+        raise exception 'Se ingresó un DNI inválido';
+    end if;
+
     select exists(select 1
                   from paciente pa
                            inner join persona p on pa.id_paciente = p.id_persona
                   where p.dni like dni_buscado)
-    into existe;
+    into existe_paciente;
 
-    if not existe then
+    if not existe_paciente then
         raise exception 'No existe un paciente con el DNI recibido';
     end if;
 
-    for fila_buscada in select p.dni, p.nombre, p.apellido, f.id_factura, f.fecha, f.monto
-                        from factura f
-                                 inner join paciente pa using (id_paciente)
-                                 inner join persona p on pa.id_paciente = p.id_persona
-                        where p.dni like dni_buscado
-        loop
-            return next fila_buscada;
-        end loop;
-    return;
+    return query select p.dni, p.nombre, p.apellido, f.id_factura, f.fecha, f.monto
+                 from factura f
+                          inner join paciente pa using (id_paciente)
+                          inner join persona p on pa.id_paciente = p.id_persona
+                 where p.dni like dni_buscado;
 end;
 $$
     language plpgsql;
@@ -565,6 +580,8 @@ create type tipo_factura_paciente_saldo as
     saldo_pendiente   varchar(250)
 );
 
+---------------------------------------- INICIO OPCIÓN 1 ----------------------------------------
+
 create or replace function fn_mensaje_saldo_pendiente(saldo_pendiente numeric(10, 2)) returns varchar(250)
 as
 $$
@@ -590,10 +607,14 @@ create or replace function fn_listado_saldo_facturas_paciente() returns setof ti
 as
 $$
 declare
-    mensaje_resultado varchar(250);
-    fila_buscada      tipo_factura_paciente_saldo;
+    fila_buscada tipo_factura_paciente_saldo;
 begin
-    for fila_buscada in select f.id_factura, f.fecha, f.monto, p.nombre, p.apellido, fn_mensaje_saldo_pendiente(f.saldo)
+    for fila_buscada in select f.id_factura,
+                               f.fecha,
+                               f.monto,
+                               p.nombre,
+                               p.apellido,
+                               fn_mensaje_saldo_pendiente(f.saldo) as deuda
                         from factura f
                                  inner join paciente pa using (id_paciente)
                                  inner join persona p on pa.id_paciente = p.id_persona
@@ -605,6 +626,32 @@ end;
 $$
     language plpgsql;
 
+---------------------------------------- FIN OPCIÓN 1 ----------------------------------------
+
+---------------------------------------- INICIO OPCIÓN 2 ----------------------------------------
+
+create or replace function fn_listado_facturas_paciente2() returns setof tipo_factura_paciente_saldo
+as
+$$
+declare
+
+begin
+    return query select f.id_factura,
+                        f.fecha,
+                        f.monto,
+                        case
+                            when f.saldo < 500000 THEN 'El cobro puede esperar'
+                            when f.saldo > 100000 then 'Cobrar urgente'
+                            else 'Cobrar prioridad'
+                            end as deuda
+                 from factura f
+                          inner join paciente pa using (id_paciente);
+end;
+$$
+    language plpgsql;
+
+---------------------------------------- FIN OPCIÓN 2 ----------------------------------------
+
 select *
 from fn_listado_saldo_facturas_paciente();
 
@@ -613,11 +660,14 @@ from fn_listado_saldo_facturas_paciente();
 -- decidir que tabla mostrar, solo debe averiguar si el parámetro pasado a la función coincide
 -- con el nombre de alguna de las tablas requeridas.
 
+---------------------------------------- INICIO OPCIÓN 1 ----------------------------------------
+
 create or replace function fn_listado_multiples_tablas(nombre_tabla text) returns setof record
 as
 $$
 begin
-    if nombre_tabla not in ('cargo', 'clasificaciones', 'especialidad', 'patologia', 'tipo_estudio') then
+    if nombre_tabla is null or
+       nombre_tabla not in ('cargo', 'clasificaciones', 'especialidad', 'patologia', 'tipo_estudio') then
         raise exception 'El nombre de tabla es inválido';
     end if;
 
@@ -627,6 +677,35 @@ $$ language plpgsql;
 
 select *
 from fn_listado_multiples_tablas('cargo') as (id_cargo integer, cargo varchar(50));
+
+---------------------------------------- FIN OPCIÓN 1 ----------------------------------------
+
+---------------------------------------- INICIO OPCIÓN 2 ----------------------------------------
+
+drop type if exists tipo_tabla_sistema;
+create type tipo_tabla_sistema as
+(
+    id    int,
+    valor varchar
+);
+
+create or replace function fn_listado_multiples_tablas2(nombre_tabla varchar) returns setof tipo_tabla_sistema
+as
+$$
+begin
+    if nombre_tabla is null or
+       nombre_tabla not in ('cargo', 'clasificaciones', 'especialidad', 'patologia', 'tipo_estudio') then
+        raise exception 'El nombre de tabla es inválido';
+    end if;
+
+    return query execute format('select * from %I', $1);
+end;
+$$ language plpgsql;
+
+select *
+from fn_listado_multiples_tablas2('patologia');
+
+---------------------------------------- FIN OPCIÓN 2 ----------------------------------------
 
 -- Ejercicio nro. 3:
 -- Plantee e implemente la o las funciones necesarias para realizar las siguientes tareas:
@@ -638,20 +717,45 @@ from fn_listado_multiples_tablas('cargo') as (id_cargo integer, cargo varchar(50
 -- tabla cama. Implemente la funcionalidad cuando una cama es arreglada (tenga en cuenta
 -- que puede suceder que la cama no tenga arreglo y deba quedar fuera de servicio).
 
-create or replace function fn_arreglar_cama(dni_empleado varchar(8), id_cama_arreglada smallint,
-                                            nuevo_estado_cama varchar(25)) returns cama
+create or replace function fn_arreglar_cama(dni_empleado varchar, id_cama_arreglada smallint,
+                                            nuevo_estado_cama varchar, p_fecha_egreso date) returns cama
 as
 $$
 declare
     existe_cama          boolean;
+    existe_empleado      boolean;
     salida               cama;
     id_empeado_reparador int;
 begin
+    ----------------------- INICIO CONTROLES -----------------------
+    if nuevo_estado_cama is null or nuevo_estado_cama not in ('OK', 'EN REPARACION', 'FUERA DE SERVICIO') then
+        raise exception 'El estado ingresado no es válido';
+    end if;
+
+    if p_fecha_egreso is null then
+        raise exception 'La fecha ingresada no es válida';
+    end if;
+
+    if id_cama_arreglada is null then
+        raise exception 'El id_cama no es válido';
+    end if;
+
     select exists(select 1 from cama c where c.id_cama = id_cama_arreglada) into existe_cama;
 
     if not existe_cama then
-        raise exception 'No existe una cama con el ID recibido';
+        raise exception 'No existe una cama con el id recibido';
     end if;
+
+    if dni_empleado is null or dni_empleado = '' then
+        raise exception 'El dni ingresado no es válido';
+    end if;
+
+    select exists(select 1 from persona p where p.dni like dni_empleado) into existe_empleado;
+
+    if not existe_empleado then
+        raise exception 'No existe un empleado con el dni recibido';
+    end if;
+    ----------------------- FIN CONTROLES -----------------------
 
     select id_empleado
     from empleado em
@@ -659,16 +763,8 @@ begin
     where p.dni like dni_empleado
     into id_empeado_reparador;
 
-    if not found then
-        raise exception 'No existe un empleado con el DNI recibido';
-    end if;
-
-    if nuevo_estado_cama not in ('OK', 'EN REPARACION', 'FUERA DE SERVICIO') then
-        raise exception 'Se ingresó un estado inválido';
-    end if;
---
     update mantenimiento_cama mc
-    set fecha_egreso = current_date,
+    set fecha_egreso = p_fecha_egreso,
         id_empleado  = id_empeado_reparador,
         estado       = nuevo_estado_cama
     from cama c
@@ -688,7 +784,6 @@ $$
 select *
 from fn_arreglar_cama('21936475', '90', 'OK');
 
-select *
 from mantenimiento_cama mc
 where mc.id_cama = '90';
 
